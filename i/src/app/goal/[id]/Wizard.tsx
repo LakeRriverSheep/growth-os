@@ -5,53 +5,34 @@ import type { Goal } from "@/lib/goals";
 
 type Answers = Record<string, string>;
 
-// 模板版计划生成（TODO: 接入 AI API 后替换为真实生成）
-function generatePlan(goal: Goal, answers: Answers): string[] {
-  const a = Object.values(answers).join(" · ");
-
-  const common = [
-    `基于你的选择：${a}`,
-    "本周期为 4 周，每周复盘一次，按完成情况调整强度。",
-  ];
-
-  const byGoal: Record<string, string[]> = {
-    fitness: [
-      "训练：以复合动作为主（深蹲/卧推/划船/推举），每次 4 个动作 × 4 组，8-12 次/组，渐进超负荷。",
-      "饮食：每公斤体重 1.6g 蛋白质，热量盈余 200-300 大卡，训练日碳水后置。",
-      "记录：每次训练把重量和组数记进「每日记录」，连续 2 周没进步就换动作。",
-    ],
-    ielts: [
-      "每天开口练：用 7 步骨架模板练 1 道 Part 3，录音回听 1 遍。",
-      "输入：每天 1 集《纸牌屋》片段，摘 3 个地道表达并造句。",
-      "每周日：模拟 1 套口语题，记录卡壳点，下周针对性补。",
-    ],
-    music: [
-      "前 2 周：每天固定时间练（绑定习惯，如晚饭后 30 分钟），只练左右手分手。",
-      "后 2 周：合手练 1 首简单曲子，每天只推进 4-8 小节，不求快。",
-      "验收：月底弹完整曲子一遍，录视频存档对比。",
-    ],
-    software: [
-      "每天至少 1 个最小提交（改一行代码也算），保持手感不断档。",
-      "按产品路线推进：当前优先完成 F2 问答流程 → F3 每日记录 → 数据库。",
-      "每学一个概念立刻用在「I」上，不做与产品无关的练习题。",
-    ],
-    money: [
-      "先把「I」自用跑通（10 月 1 日验收），功能不用多，要能用。",
-      "同步记录自媒体数据（播放/涨粉），找到能变现的内容方向。",
-      "设置一个「第一笔收入」触发器：任何渠道进账 1 元，即达成里程碑。",
-    ],
-  };
-
-  return [...common, ...(byGoal[goal.id] ?? [])];
-}
-
 export default function Wizard({ goal }: { goal: Goal }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Answers>({});
   const [plan, setPlan] = useState<string[] | null>(null);
+  const [source, setSource] = useState<"template" | "ai">("template");
+  const [loading, setLoading] = useState(false);
 
   const total = goal.questions.length;
-  const done = step >= total;
+
+  async function generate(finalAnswers: Answers) {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goalId: goal.id, answers: finalAnswers }),
+      });
+      const data = await res.json();
+      setPlan(data.plan);
+      setSource(data.source);
+      localStorage.setItem(`plan-${goal.id}`, JSON.stringify(finalAnswers));
+    } catch {
+      setPlan(["生成失败，请稍后重试。"]);
+      setSource("template");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   function choose(value: string) {
     const q = goal.questions[step];
@@ -61,8 +42,7 @@ export default function Wizard({ goal }: { goal: Goal }) {
       setStep(step + 1);
     } else {
       setStep(total);
-      setPlan(generatePlan(goal, next));
-      localStorage.setItem(`plan-${goal.id}`, JSON.stringify(next));
+      generate(next);
     }
   }
 
@@ -70,6 +50,15 @@ export default function Wizard({ goal }: { goal: Goal }) {
     setStep(0);
     setAnswers({});
     setPlan(null);
+  }
+
+  if (loading) {
+    return (
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-10 text-center">
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-zinc-700 border-t-emerald-500" />
+        <p className="mt-4 text-sm text-zinc-400">正在生成你的 4 周行动计划…</p>
+      </div>
+    );
   }
 
   if (plan) {
@@ -95,7 +84,9 @@ export default function Wizard({ goal }: { goal: Goal }) {
           重新生成
         </button>
         <p className="mt-3 text-xs text-zinc-600">
-          当前为模板生成 · 接入 AI API 后将根据你的回答个性化生成
+          {source === "ai"
+            ? "由 AI 根据你的回答个性化生成"
+            : "当前为模板生成 · 在 i/.env.local 填入 DEEPSEEK_API_KEY 后即为 AI 生成"}
         </p>
       </div>
     );
