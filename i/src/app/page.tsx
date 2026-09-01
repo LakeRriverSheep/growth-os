@@ -41,8 +41,11 @@ export default function Home() {
           ))}
         </section>
 
-        <footer className="mt-10 text-center text-xs text-zinc-600">
-          点击卡片进入 → AI 问答生成行动计划
+        <footer className="mt-10 flex justify-center gap-6 text-xs">
+          <a href="/records" className="text-zinc-500 transition-colors hover:text-zinc-300">
+            📝 每日记录
+          </a>
+          <span className="text-zinc-600">点击卡片进入 → AI 问答生成行动计划</span>
         </footer>
       </main>
     </div>
