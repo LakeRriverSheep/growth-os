@@ -14,9 +14,9 @@ export async function GET(req: NextRequest) {
   }
 
   const rows = db
-    .prepare("SELECT date FROM records ORDER BY date DESC")
-    .all() as { date: string }[];
-  return NextResponse.json(rows.map((r) => r.date));
+    .prepare("SELECT date, done FROM records ORDER BY date DESC")
+    .all() as { date: string; done: number }[];
+  return NextResponse.json(rows);
 }
 
 // POST /api/records  body: { date, training, diet, calories, done }

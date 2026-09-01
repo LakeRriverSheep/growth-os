@@ -16,5 +16,13 @@ db.exec(`
     calories TEXT DEFAULT '',
     done INTEGER DEFAULT 0,
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
-  )
+  );
+
+  CREATE TABLE IF NOT EXISTS plans (
+    goal_id TEXT PRIMARY KEY,
+    answers TEXT DEFAULT '{}',
+    plan TEXT DEFAULT '[]',
+    source TEXT DEFAULT 'template',
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
 `);

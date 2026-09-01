@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Goal } from "@/lib/goals";
 
 type Answers = Record<string, string>;
@@ -11,8 +11,26 @@ export default function Wizard({ goal }: { goal: Goal }) {
   const [plan, setPlan] = useState<string[] | null>(null);
   const [source, setSource] = useState<"template" | "ai">("template");
   const [loading, setLoading] = useState(false);
+  const [restoring, setRestoring] = useState(true);
 
   const total = goal.questions.length;
+
+  // 进入卡片时恢复已保存的计划
+  useEffect(() => {
+    fetch(`/api/plan?goalId=${goal.id}`)
+      .then((r) => r.json())
+      .then((saved) => {
+        if (saved && Array.isArray(saved.plan) && saved.plan.length > 0) {
+          setPlan(saved.plan);
+          setAnswers(saved.answers ?? {});
+          setSource(saved.source === "ai" ? "ai" : "template");
+          setStep(total);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setRestoring(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [goal.id]);
 
   async function generate(finalAnswers: Answers) {
     setLoading(true);
@@ -25,7 +43,6 @@ export default function Wizard({ goal }: { goal: Goal }) {
       const data = await res.json();
       setPlan(data.plan);
       setSource(data.source);
-      localStorage.setItem(`plan-${goal.id}`, JSON.stringify(finalAnswers));
     } catch {
       setPlan(["生成失败，请稍后重试。"]);
       setSource("template");
@@ -50,6 +67,14 @@ export default function Wizard({ goal }: { goal: Goal }) {
     setStep(0);
     setAnswers({});
     setPlan(null);
+  }
+
+  if (restoring) {
+    return (
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-10 text-center">
+        <p className="text-sm text-zinc-500">读取中…</p>
+      </div>
+    );
   }
 
   if (loading) {

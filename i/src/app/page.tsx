@@ -1,3 +1,5 @@
+import StatsBar from "@/components/StatsBar";
+
 const goals = [
   { id: "fitness", emoji: "💪", title: "健身", desc: "练出薄肌（提升骨骼肌，当前 23.9kg）", deadline: "长期", progress: 0 },
   { id: "ielts", emoji: "🗣️", title: "雅思", desc: "口语 8.0", deadline: "2027", progress: 0 },
@@ -14,6 +16,8 @@ export default function Home() {
           <h1 className="text-6xl font-bold tracking-tight">I</h1>
           <p className="text-zinc-400">电子版的自己 · 2026.09.01 启动</p>
         </header>
+
+        <StatsBar />
 
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {goals.map((g) => (

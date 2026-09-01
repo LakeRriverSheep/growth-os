@@ -20,7 +20,7 @@ export default function RecordsPage() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [rec, setRec] = useState<DayRecord>(emptyRecord);
   const [savedMsg, setSavedMsg] = useState("");
-  const [history, setHistory] = useState<string[]>([]);
+  const [history, setHistory] = useState<{ date: string; done: number }[]>([]);
 
   // 加载当天记录 + 全部历史日期
   useEffect(() => {
@@ -143,17 +143,20 @@ export default function RecordsPage() {
               历史记录（{history.length} 天）
             </h2>
             <div className="flex flex-wrap gap-2">
-              {history.map((d) => (
+              {history.map((h) => (
                 <button
-                  key={d}
-                  onClick={() => setDate(d)}
+                  key={h.date}
+                  onClick={() => setDate(h.date)}
                   className={`rounded-full border px-3 py-1 text-xs transition-colors ${
-                    d === date
+                    h.date === date
                       ? "border-emerald-500 text-emerald-400"
-                      : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
+                      : h.done === 1
+                        ? "border-emerald-800 text-emerald-500 hover:border-emerald-600"
+                        : "border-zinc-700 text-zinc-400 hover:border-zinc-500"
                   }`}
                 >
-                  {d}
+                  {h.done === 1 ? "✓ " : ""}
+                  {h.date}
                 </button>
               ))}
             </div>
