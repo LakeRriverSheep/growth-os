@@ -9,38 +9,46 @@ type DayRecord = {
   done: boolean;
 };
 
-const keyOf = (date: string) => `record-${date}`;
+const emptyRecord: DayRecord = {
+  training: "",
+  diet: "",
+  calories: "",
+  done: false,
+};
 
 export default function RecordsPage() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [rec, setRec] = useState<DayRecord>({
-    training: "",
-    diet: "",
-    calories: "",
-    done: false,
-  });
+  const [rec, setRec] = useState<DayRecord>(emptyRecord);
   const [savedMsg, setSavedMsg] = useState("");
   const [history, setHistory] = useState<string[]>([]);
 
-  // 加载当天已有记录 + 全部历史日期
+  // 加载当天记录 + 全部历史日期
   useEffect(() => {
-    const raw = localStorage.getItem(keyOf(date));
-    if (raw) {
-      setRec(JSON.parse(raw));
-    } else {
-      setRec({ training: "", diet: "", calories: "", done: false });
-    }
-    setHistory(
-      Object.keys(localStorage)
-        .filter((k) => k.startsWith("record-"))
-        .map((k) => k.slice(7))
-        .sort()
-        .reverse(),
-    );
-  }, [date]);
+    fetch(`/api/records?date=${date}`)
+      .then((r) => r.json())
+      .then((row) => {
+        if (row) {
+          setRec({
+            training: row.training ?? "",
+            diet: row.diet ?? "",
+            calories: row.calories ?? "",
+            done: row.done === 1,
+          });
+        } else {
+          setRec(emptyRecord);
+        }
+      });
+    fetch("/api/records")
+      .then((r) => r.json())
+      .then(setHistory);
+  }, [date, savedMsg]);
 
-  function save() {
-    localStorage.setItem(keyOf(date), JSON.stringify(rec));
+  async function save() {
+    await fetch("/api/records", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, ...rec }),
+    });
     setSavedMsg(`已保存 ${date}`);
     setTimeout(() => setSavedMsg(""), 2000);
   }
