@@ -1,39 +1,9 @@
 const goals = [
-  {
-    emoji: "💪",
-    title: "健身",
-    desc: "练出薄肌（提升骨骼肌，当前 23.9kg）",
-    deadline: "长期",
-    progress: 0,
-  },
-  {
-    emoji: "🗣️",
-    title: "雅思",
-    desc: "口语 8.0",
-    deadline: "2027",
-    progress: 0,
-  },
-  {
-    emoji: "🎹",
-    title: "音乐",
-    desc: "电子琴入门（后续加吉他）",
-    deadline: "长期",
-    progress: 0,
-  },
-  {
-    emoji: "⌨️",
-    title: "软件",
-    desc: "精通软件工程，做出这个产品本身",
-    deadline: "长期",
-    progress: 1,
-  },
-  {
-    emoji: "💰",
-    title: "赚钱",
-    desc: "独立产品产生第一笔收入",
-    deadline: "待定",
-    progress: 0,
-  },
+  { id: "fitness", emoji: "💪", title: "健身", desc: "练出薄肌（提升骨骼肌，当前 23.9kg）", deadline: "长期", progress: 0 },
+  { id: "ielts", emoji: "🗣️", title: "雅思", desc: "口语 8.0", deadline: "2027", progress: 0 },
+  { id: "music", emoji: "🎹", title: "音乐", desc: "电子琴入门（后续加吉他）", deadline: "长期", progress: 0 },
+  { id: "software", emoji: "⌨️", title: "软件", desc: "精通软件工程，做出这个产品本身", deadline: "长期", progress: 1 },
+  { id: "money", emoji: "💰", title: "赚钱", desc: "独立产品产生第一笔收入", deadline: "待定", progress: 0 },
 ];
 
 export default function Home() {
@@ -47,9 +17,10 @@ export default function Home() {
 
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {goals.map((g) => (
-            <button
+            <a
               key={g.title}
-              className="group rounded-2xl border border-zinc-800 bg-zinc-900 p-5 text-left transition-colors hover:border-zinc-500"
+              href={`/goal/${g.id}`}
+              className="group rounded-2xl border border-zinc-800 bg-zinc-900 p-5 transition-colors hover:border-zinc-500"
             >
               <div className="flex items-center justify-between">
                 <span className="text-2xl">{g.emoji}</span>
@@ -66,12 +37,12 @@ export default function Home() {
               <p className="mt-1.5 text-right text-xs text-zinc-500">
                 {g.progress}%
               </p>
-            </button>
+            </a>
           ))}
         </section>
 
         <footer className="mt-10 text-center text-xs text-zinc-600">
-          点击卡片进入 → AI 问答生成行动计划（下一功能）
+          点击卡片进入 → AI 问答生成行动计划
         </footer>
       </main>
     </div>
