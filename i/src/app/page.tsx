@@ -1,57 +1,80 @@
-import StatsBar from "@/components/StatsBar";
+"use client";
 
-const goals = [
-  { id: "fitness", emoji: "💪", title: "健身", desc: "练出薄肌（提升骨骼肌，当前 23.9kg）", deadline: "长期", progress: 0 },
-  { id: "ielts", emoji: "🗣️", title: "雅思", desc: "口语 8.0", deadline: "2027", progress: 0 },
-  { id: "music", emoji: "🎹", title: "音乐", desc: "电子琴入门（后续加吉他）", deadline: "长期", progress: 0 },
-  { id: "software", emoji: "⌨️", title: "软件", desc: "精通软件工程，做出这个产品本身", deadline: "长期", progress: 1 },
-  { id: "money", emoji: "💰", title: "赚钱", desc: "独立产品产生第一笔收入", deadline: "待定", progress: 0 },
+const categories = [
+  {
+    id: "fitness",
+    emoji: "💪",
+    title: "健身",
+    desc: "减脂 · 增肌 · 塑形，按你的身体数据定制吃练计划",
+    ready: true,
+  },
+  {
+    id: "english",
+    emoji: "🗣️",
+    title: "英语考试",
+    desc: "四六级 · 雅思 · 考研 · 小学到高中，覆盖一辈子",
+    ready: false,
+  },
+  {
+    id: "more",
+    emoji: "✨",
+    title: "更多目标",
+    desc: "音乐 · 理财 · 学业 · 事业……",
+    ready: false,
+  },
 ];
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-zinc-950 px-6 py-12 text-zinc-100">
-      <main className="mx-auto max-w-4xl">
-        <header className="mb-10 flex items-baseline gap-4">
-          <h1 className="text-6xl font-bold tracking-tight">I</h1>
-          <p className="text-zinc-400">电子版的自己 · 2026.09.01 启动</p>
-        </header>
+    <div className="flex h-screen flex-col bg-zinc-950 text-zinc-100">
+      {/* 顶部标识 */}
+      <header className="flex items-baseline gap-3 px-6 pt-8">
+        <h1 className="text-4xl font-bold tracking-tight">I</h1>
+        <p className="text-xs text-zinc-500">上下滑动，选你最想实现的第一个目标</p>
+      </header>
 
-        <StatsBar />
-
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {goals.map((g) => (
-            <a
-              key={g.title}
-              href={`/goal/${g.id}`}
-              className="group rounded-2xl border border-zinc-800 bg-zinc-900 p-5 transition-colors hover:border-zinc-500"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-2xl">{g.emoji}</span>
-                <span className="text-xs text-zinc-500">{g.deadline}</span>
+      {/* 上下滑动选择区 */}
+      <main className="flex-1 snap-y snap-mandatory overflow-y-scroll px-6 pb-4">
+        {categories.map((c) => (
+          <div key={c.id} className="flex h-[68vh] snap-center items-center py-3">
+            {c.ready ? (
+              <a
+                href="/goal/fitness"
+                className="flex h-full w-full flex-col justify-between rounded-3xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 p-8 transition-colors hover:border-emerald-600"
+              >
+                <div>
+                  <span className="text-6xl">{c.emoji}</span>
+                  <h2 className="mt-6 text-4xl font-bold">{c.title}</h2>
+                  <p className="mt-3 text-base leading-7 text-zinc-400">{c.desc}</p>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-emerald-500">点我开始 →</span>
+                  <span className="text-xs text-zinc-600">已上线</span>
+                </div>
+              </a>
+            ) : (
+              <div className="flex h-full w-full flex-col justify-between rounded-3xl border border-dashed border-zinc-800 bg-zinc-950 p-8 opacity-50">
+                <div>
+                  <span className="text-6xl">{c.emoji}</span>
+                  <h2 className="mt-6 text-4xl font-bold">{c.title}</h2>
+                  <p className="mt-3 text-base leading-7 text-zinc-400">{c.desc}</p>
+                </div>
+                <p className="text-xs text-zinc-600">即将上线</p>
               </div>
-              <h2 className="mt-3 text-xl font-semibold">{g.title}</h2>
-              <p className="mt-1 text-sm text-zinc-400">{g.desc}</p>
-              <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
-                <div
-                  className="h-full rounded-full bg-emerald-500"
-                  style={{ width: `${g.progress}%` }}
-                />
-              </div>
-              <p className="mt-1.5 text-right text-xs text-zinc-500">
-                {g.progress}%
-              </p>
-            </a>
-          ))}
-        </section>
-
-        <footer className="mt-10 flex justify-center gap-6 text-xs">
-          <a href="/records" className="text-zinc-500 transition-colors hover:text-zinc-300">
-            📝 每日记录
-          </a>
-          <span className="text-zinc-600">点击卡片进入 → AI 问答生成行动计划</span>
-        </footer>
+            )}
+          </div>
+        ))}
       </main>
+
+      {/* 底部导航 */}
+      <footer className="flex justify-center gap-8 border-t border-zinc-900 px-6 py-4 text-xs">
+        <a href="/records" className="text-zinc-500 transition-colors hover:text-zinc-300">
+          📝 每日记录
+        </a>
+        <a href="/classic" className="text-zinc-600 transition-colors hover:text-zinc-400">
+          经典版
+        </a>
+      </footer>
     </div>
   );
 }
