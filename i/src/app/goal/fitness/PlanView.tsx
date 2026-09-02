@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import { useEffect, useMemo, useState } from "react";
 import type { FitnessPlan, DayPlan, MealPlan } from "@/lib/fitness";
@@ -198,9 +199,9 @@ export default function PlanView({ plan, onRestart }: { plan: FitnessPlan; onRes
     <div className="mx-auto max-w-lg px-5 pb-16 pt-5">
       {/* 头部 */}
       <div className="flex items-center justify-between">
-        <a href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
+        <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
           ←
-        </a>
+        </Link>
         <span className="text-xs text-zinc-500">
           {overview.splitName} · {overview.timeline}
         </span>

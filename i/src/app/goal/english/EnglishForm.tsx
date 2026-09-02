@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import { useEffect, useRef, useState } from "react";
 import type { EnglishInput, EnglishPlan } from "@/lib/english";
@@ -61,6 +62,17 @@ function defaultDate() {
   d.setDate(d.getDate() + 90);
   return d.toISOString().slice(0, 10);
 }
+
+// 倒计时天数：在事件处理器里调用（渲染期调 Date.now 违反 React 纯度规则）
+function calcDaysLeft(dateStr: string): number {
+  return Math.max(
+    1,
+    Math.ceil((new Date(dateStr).getTime() - Date.now()) / 86400000),
+  );
+}
+
+// 模块加载时算一次，作为初始展示值
+const INITIAL_DAYS_LEFT = calcDaysLeft(defaultDate());
 
 function Card({
   opt,
@@ -145,10 +157,13 @@ export default function EnglishForm() {
     if (i !== step && i >= 0 && i < STEP_TITLES.length) setStep(i);
   }
 
-  const daysLeft = Math.max(
-    1,
-    Math.ceil((new Date(form.examDate).getTime() - Date.now()) / 86400000),
-  );
+  // 倒计时显示：随考试日期在事件处理器里更新（不能渲染期现算）
+  const [daysLeft, setDaysLeft] = useState(INITIAL_DAYS_LEFT);
+
+  function setExamDate(v: string) {
+    setForm((f) => ({ ...f, examDate: v }));
+    setDaysLeft(calcDaysLeft(v));
+  }
 
   function canNext(): boolean {
     switch (step) {
@@ -187,6 +202,7 @@ export default function EnglishForm() {
     setPlan(null);
     setStep(0);
     setForm({ exam: "雅思", level: "中等", target: "", examDate: defaultDate(), hours: "2", weak: [] });
+    setDaysLeft(calcDaysLeft(defaultDate()));
     requestAnimationFrame(() => containerRef.current?.scrollTo({ top: 0 }));
   }
 
@@ -208,9 +224,9 @@ export default function EnglishForm() {
     <div className="relative mx-auto flex h-[100dvh] max-w-lg flex-col">
       {/* 顶部：返回 + 进度 */}
       <div className="flex items-center gap-3 px-5 pt-5">
-        <a href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
+        <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
           ←
-        </a>
+        </Link>
         <div className="flex flex-1 gap-1">
           {STEP_TITLES.map((_, i) => (
             <div
@@ -278,7 +294,7 @@ export default function EnglishForm() {
               type="date"
               value={form.examDate}
               min={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => setForm({ ...form, examDate: e.target.value })}
+              onChange={(e) => setExamDate(e.target.value)}
               className="w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-5 text-center text-2xl font-bold text-emerald-400 focus:border-emerald-500 focus:outline-none [color-scheme:dark]"
             />
             <div className="mt-4 flex justify-center gap-2">
@@ -293,7 +309,7 @@ export default function EnglishForm() {
                   onClick={() => {
                     const dt = new Date();
                     dt.setDate(dt.getDate() + d);
-                    setForm({ ...form, examDate: dt.toISOString().slice(0, 10) });
+                    setExamDate(dt.toISOString().slice(0, 10));
                   }}
                   className="rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200"
                 >

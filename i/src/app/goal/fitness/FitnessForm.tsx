@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import { useEffect, useState } from "react";
 import type { FitnessInput, FitnessPlan } from "@/lib/fitness";
@@ -262,9 +263,9 @@ export default function FitnessForm() {
 
   return (
     <div className="mx-auto max-w-lg px-5 pb-32 pt-5">
-      <a href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
+      <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
         ← 返回
-      </a>
+      </Link>
       <h1 className="mt-3 text-2xl font-bold">💪 定制你的健身计划</h1>
       <p className="mt-1 text-xs text-zinc-500">从上往下填完，底部一键生成 · 越诚实，计划越能执行</p>
 

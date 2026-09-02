@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import type { EnglishPlan } from "@/lib/english";
 
@@ -24,9 +25,9 @@ export default function EnglishPlanView({ plan, onRestart }: { plan: EnglishPlan
 
   return (
     <div className="mx-auto max-w-lg px-5 pb-16 pt-6">
-      <a href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
+      <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
         ←
-      </a>
+      </Link>
       <h1 className="mt-3 text-2xl font-bold">
         {overview.exam} · 目标 <span className="text-emerald-400">{overview.target}</span>
       </h1>
@@ -108,12 +109,12 @@ export default function EnglishPlanView({ plan, onRestart }: { plan: EnglishPlan
         >
           重新填写
         </button>
-        <a
+        <Link
           href="/records"
           className="flex-1 rounded-full bg-emerald-600 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-emerald-500"
         >
           去每日记录打卡 →
-        </a>
+        </Link>
       </div>
     </div>
   );

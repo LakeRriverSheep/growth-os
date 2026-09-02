@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 import { useEffect, useState } from "react";
 
@@ -120,9 +121,9 @@ export default function RecordsPage() {
   return (
     <div className="min-h-screen bg-zinc-950 px-6 py-12 text-zinc-100">
       <main className="mx-auto max-w-2xl">
-        <a href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
+        <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
           ← 返回首页
-        </a>
+        </Link>
         <header className="mt-4 mb-8">
           <h1 className="text-2xl font-bold">每日记录</h1>
           <p className="text-sm text-zinc-400">训练 · 饮食 · 完成情况</p>
@@ -130,12 +131,12 @@ export default function RecordsPage() {
 
         {/* 今日训练：从健身计划自动带出，不再靠回忆填表 */}
         {schedule === null ? (
-          <a
+          <Link
             href="/goal/fitness"
             className="mb-6 block rounded-2xl border border-dashed border-zinc-700 p-4 text-sm text-zinc-400 transition-colors hover:border-emerald-600 hover:text-zinc-200"
           >
             还没有健身计划，先去生成一个 →（生成后这里会自动显示每天该练什么）
-          </a>
+          </Link>
         ) : todayPlan && isTrainingDay ? (
           <div className="mb-6 rounded-2xl border border-emerald-900 bg-emerald-950/30 p-5">
             <div className="flex flex-wrap items-center gap-2">
@@ -168,20 +169,20 @@ export default function RecordsPage() {
               >
                 {rec.done ? "✓ 今日已打卡" : "✓ 练完了，一键打卡"}
               </button>
-              <a
+              <Link
                 href="/goal/fitness"
                 className="text-xs text-zinc-500 hover:text-zinc-300"
               >
                 查看完整计划（含练前练后餐）→
-              </a>
+              </Link>
             </div>
           </div>
         ) : todayPlan ? (
           <div className="mb-6 rounded-2xl border border-zinc-800 bg-zinc-900 p-4 text-sm text-zinc-400">
             {todayPlan.day} · 休息日 —— 拉伸 10 分钟，蛋白质照常吃。
-            <a href="/goal/fitness" className="ml-2 text-xs text-zinc-500 hover:text-zinc-300">
+            <Link href="/goal/fitness" className="ml-2 text-xs text-zinc-500 hover:text-zinc-300">
               看完整计划 →
-            </a>
+            </Link>
           </div>
         ) : null}
 

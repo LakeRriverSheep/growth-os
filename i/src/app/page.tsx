@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 
 const categories = [
   {
@@ -38,7 +39,7 @@ export default function Home() {
         {categories.map((c) => (
           <div key={c.id} className="flex h-[68vh] snap-center items-center py-3 md:h-auto md:snap-align-none md:py-0">
             {c.ready ? (
-              <a
+              <Link
                 href={`/goal/${c.id}`}
                 className="flex h-full w-full flex-col justify-between rounded-3xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 p-8 transition-colors hover:border-emerald-600 md:h-72 md:p-6"
               >
@@ -51,7 +52,7 @@ export default function Home() {
                   <span className="text-sm text-emerald-500">点我开始 →</span>
                   <span className="text-xs text-zinc-600">已上线</span>
                 </div>
-              </a>
+              </Link>
             ) : (
               <div className="flex h-full w-full flex-col justify-between rounded-3xl border border-dashed border-zinc-800 bg-zinc-950 p-8 opacity-50 md:h-72 md:p-6">
                 <div>
@@ -68,9 +69,9 @@ export default function Home() {
 
       {/* 底部导航 */}
       <footer className="flex justify-center gap-8 border-t border-zinc-900 px-6 py-4 text-xs">
-        <a href="/records" className="text-zinc-500 transition-colors hover:text-zinc-300">
+        <Link href="/records" className="text-zinc-500 transition-colors hover:text-zinc-300">
           📝 每日记录
-        </a>
+        </Link>
       </footer>
     </div>
   );
