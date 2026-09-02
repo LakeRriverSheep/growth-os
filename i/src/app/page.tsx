@@ -71,9 +71,6 @@ export default function Home() {
         <a href="/records" className="text-zinc-500 transition-colors hover:text-zinc-300">
           📝 每日记录
         </a>
-        <a href="/classic" className="text-zinc-600 transition-colors hover:text-zinc-400">
-          经典版
-        </a>
       </footer>
     </div>
   );
