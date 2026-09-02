@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getGoal } from "@/lib/goals";
 import { db } from "@/lib/db";
 import { generateFitnessPlan, type FitnessInput } from "@/lib/fitness";
+import { generateEnglishPlan, type EnglishInput } from "@/lib/english";
 
 const SYSTEM_PROMPT = `你是一位个人成长教练，为用户生成具体、可执行、循序渐进的行动计划。
 规则：
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
   };
 
   const goal = getGoal(goalId);
-  if (!goal && goalId !== "fitness") {
+  if (!goal && goalId !== "fitness" && goalId !== "english") {
     return NextResponse.json({ error: "goal not found" }, { status: 404 });
   }
 
@@ -75,6 +76,14 @@ export async function POST(req: NextRequest) {
     const plan = generateFitnessPlan(f);
     savePlan(goalId, answers, plan, "fitness-calc");
     return NextResponse.json({ source: "fitness-calc", plan });
+  }
+
+  // 英语考试：本地计算倒计时 + 任务分配
+  if (goalId === "english") {
+    const e = answers as unknown as EnglishInput;
+    const plan = generateEnglishPlan(e);
+    savePlan(goalId, answers, plan, "english-calc");
+    return NextResponse.json({ source: "english-calc", plan });
   }
 
   const title = goal?.title ?? "健身";

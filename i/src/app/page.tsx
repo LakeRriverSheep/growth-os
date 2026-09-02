@@ -13,7 +13,7 @@ const categories = [
     emoji: "🗣️",
     title: "英语考试",
     desc: "四六级 · 雅思 · 考研 · 小学到高中，覆盖一辈子",
-    ready: false,
+    ready: true,
   },
   {
     id: "more",
@@ -39,7 +39,7 @@ export default function Home() {
           <div key={c.id} className="flex h-[68vh] snap-center items-center py-3">
             {c.ready ? (
               <a
-                href="/goal/fitness"
+                href={`/goal/${c.id}`}
                 className="flex h-full w-full flex-col justify-between rounded-3xl border border-zinc-800 bg-gradient-to-b from-zinc-900 to-zinc-950 p-8 transition-colors hover:border-emerald-600"
               >
                 <div>

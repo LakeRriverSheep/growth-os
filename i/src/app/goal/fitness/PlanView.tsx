@@ -18,6 +18,8 @@ function StatCard({ label, value, unit, accent }: { label: string; value: number
   );
 }
 
+const PLACE_EMOJI: Record<string, string> = { 健身房: "🏟️", 家里: "🏠", 户外: "🌳" };
+
 function ExerciseTable({ day }: { day: DayPlan }) {
   return (
     <div className="mt-2 overflow-hidden rounded-xl border border-zinc-800">
@@ -25,18 +27,20 @@ function ExerciseTable({ day }: { day: DayPlan }) {
         <thead>
           <tr className="bg-zinc-900 text-left text-[11px] text-zinc-500">
             <th className="px-3 py-2 font-normal">动作</th>
-            <th className="px-2 py-2 font-normal">组数</th>
-            <th className="px-2 py-2 font-normal">次数</th>
+            <th className="px-2 py-2 font-normal">组×次</th>
             <th className="px-2 py-2 font-normal">休息</th>
           </tr>
         </thead>
         <tbody>
           {day.exercises.map((ex, i) => (
             <tr key={i} className={i % 2 === 0 ? "bg-zinc-950/40" : "bg-zinc-900/30"}>
-              <td className="px-3 py-2.5 text-zinc-200">{ex.name}</td>
-              <td className="px-2 py-2.5 text-zinc-400">{ex.sets}</td>
-              <td className="px-2 py-2.5 text-zinc-400">{ex.reps}</td>
-              <td className="px-2 py-2.5 text-zinc-500">{ex.rest}</td>
+              <td className="px-3 py-2.5">
+                <p className="text-zinc-200">{ex.name}</p>
+                <p className="mt-0.5 text-[10px] text-zinc-500">{ex.muscle}</p>
+                <p className="mt-0.5 text-[10px] leading-4 text-emerald-600/90">{ex.load}</p>
+              </td>
+              <td className="whitespace-nowrap px-2 py-2.5 text-zinc-300">{ex.setsReps}</td>
+              <td className="whitespace-nowrap px-2 py-2.5 text-zinc-500">{ex.rest}</td>
             </tr>
           ))}
         </tbody>
@@ -59,22 +63,28 @@ function DayCard({ day }: { day: DayPlan }) {
           <span className="text-sm text-zinc-200">{day.type}</span>
         </div>
         {!isRest && (
-          <span className="rounded-full bg-emerald-950/60 px-2.5 py-0.5 text-[11px] text-emerald-400">{day.slot}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="rounded-full bg-zinc-800/80 px-2.5 py-0.5 text-[11px] text-zinc-300">
+              {PLACE_EMOJI[day.place] ?? "📍"} {day.place}
+            </span>
+            <span className="rounded-full bg-emerald-950/60 px-2.5 py-0.5 text-[11px] text-emerald-400">{day.slot}</span>
+          </div>
         )}
       </div>
       {isRest ? (
-        <p className="mt-2 text-xs text-zinc-500">
-          休息日 · 拉伸 10 分钟 + 走路 6000 步，吃够蛋白，肌肉是休息时长的
-        </p>
+        <p className="mt-2 text-xs text-zinc-500">休息日 · 拉伸 10 分钟 + 走路 6000 步，吃够蛋白，肌肉是休息时长的</p>
       ) : (
-        <ExerciseTable day={day} />
+        <>
+          <p className="mt-1 text-[11px] text-zinc-500">预计训练时长 ≈ {day.minutes} 分钟（含热身）</p>
+          <ExerciseTable day={day} />
+        </>
       )}
     </div>
   );
 }
 
 export default function PlanView({ plan, onRestart }: { plan: FitnessPlan; onRestart: () => void }) {
-  const { overview, macros, schedule, notes } = plan;
+  const { overview, macros, warmup, schedule, progression, notes } = plan;
   const trainingDays = schedule.filter((d) => d.type !== "休息");
 
   return (
@@ -86,15 +96,13 @@ export default function PlanView({ plan, onRestart }: { plan: FitnessPlan; onRes
       <h1 className="mt-3 text-2xl font-bold">
         你的 <span className="text-emerald-400">{overview.splitName}</span>
       </h1>
-      <p className="mt-1 text-xs text-zinc-500">
-        每周 {overview.daysPerWeek} 练 · {overview.slot} · 已存入数据库，重新打开不丢
-      </p>
+      <p className="mt-1 text-xs text-zinc-500">已存入数据库，重新打开不丢 · {overview.timeline}</p>
 
       {/* 概览卡 */}
       <div className="mt-5 grid grid-cols-3 gap-2.5">
         <StatCard label="分化" value={overview.daysPerWeek} unit="练/周" />
-        <StatCard label="训练时段" value={overview.slot} />
-        <StatCard label="每次动作" value={trainingDays[0]?.exercises.length ?? 0} unit="个" />
+        <StatCard label="去健身房" value={overview.gymDays} unit="天" />
+        <StatCard label="在家练" value={overview.homeDays} unit="天" />
       </div>
 
       {/* 营养数字卡 */}
@@ -113,11 +121,38 @@ export default function PlanView({ plan, onRestart }: { plan: FitnessPlan; onRes
         {macros.note}
       </p>
 
+      {/* 热身流程 */}
+      <h2 className="mt-8 text-base font-semibold text-zinc-100">🔥 每次开练前（10 分钟）</h2>
+      <div className="mt-3 space-y-2">
+        {warmup.map((w, i) => (
+          <div key={i} className="flex items-start gap-2.5 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs leading-5 text-zinc-300">
+            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-[9px] text-zinc-400">
+              {i + 1}
+            </span>
+            {w}
+          </div>
+        ))}
+      </div>
+
       {/* 一周排期 */}
       <h2 className="mt-8 text-base font-semibold text-zinc-100">📅 一周怎么练</h2>
       <div className="mt-3 space-y-3">
         {schedule.map((d) => (
           <DayCard key={d.day} day={d} />
+        ))}
+      </div>
+
+      {/* 渐进超负荷周期 */}
+      <h2 className="mt-8 text-base font-semibold text-zinc-100">📈 4 周怎么加重</h2>
+      <div className="mt-3 space-y-2.5">
+        {progression.map((p, i) => (
+          <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3.5">
+            <div className="flex items-baseline gap-2">
+              <span className="text-xs font-semibold text-emerald-400">{p.week}</span>
+              <span className="text-xs font-medium text-zinc-200">{p.focus}</span>
+            </div>
+            <p className="mt-1.5 text-xs leading-5 text-zinc-400">{p.how}</p>
+          </div>
         ))}
       </div>
 
