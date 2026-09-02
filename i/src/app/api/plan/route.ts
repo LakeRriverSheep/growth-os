@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGoal } from "@/lib/goals";
-import { db } from "@/lib/db";
+import { dbGet, dbRun, type Row } from "@/lib/db";
 import { generateFitnessPlan, type FitnessInput } from "@/lib/fitness";
 import { generateEnglishPlan, type EnglishInput } from "@/lib/english";
 
@@ -21,13 +21,13 @@ function templatePlan(goalTitle: string, answers: Record<string, string>): strin
   ];
 }
 
-function savePlan(
+async function savePlan(
   goalId: string,
   answers: Record<string, string>,
   plan: string[] | Record<string, unknown>,
   source: string,
 ) {
-  db.prepare(
+  await dbRun(
     `INSERT INTO plans (goal_id, answers, plan, source, updated_at)
      VALUES (?, ?, ?, ?, datetime('now', 'localtime'))
      ON CONFLICT(goal_id) DO UPDATE SET
@@ -35,7 +35,11 @@ function savePlan(
        plan = excluded.plan,
        source = excluded.source,
        updated_at = excluded.updated_at`,
-  ).run(goalId, JSON.stringify(answers), JSON.stringify(plan), source);
+    goalId,
+    JSON.stringify(answers),
+    JSON.stringify(plan),
+    source,
+  );
 }
 
 // GET /api/plan?goalId=xx → 读取已保存的计划（重新进入卡片时恢复）
@@ -45,9 +49,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "goalId required" }, { status: 400 });
   }
 
-  const row = db
-    .prepare("SELECT * FROM plans WHERE goal_id = ?")
-    .get(goalId) as Record<string, unknown> | undefined;
+  const row = await dbGet<Row>("SELECT * FROM plans WHERE goal_id = ?", goalId);
 
   if (!row) return NextResponse.json(null);
 
@@ -74,7 +76,7 @@ export async function POST(req: NextRequest) {
   if (goalId === "fitness") {
     const f = answers as unknown as FitnessInput;
     const plan = generateFitnessPlan(f);
-    savePlan(goalId, answers, plan, "fitness-calc");
+    await savePlan(goalId, answers, plan, "fitness-calc");
     return NextResponse.json({ source: "fitness-calc", plan });
   }
 
@@ -82,7 +84,7 @@ export async function POST(req: NextRequest) {
   if (goalId === "english") {
     const e = answers as unknown as EnglishInput;
     const plan = generateEnglishPlan(e);
-    savePlan(goalId, answers, plan, "english-calc");
+    await savePlan(goalId, answers, plan, "english-calc");
     return NextResponse.json({ source: "english-calc", plan });
   }
 
@@ -90,7 +92,7 @@ export async function POST(req: NextRequest) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) {
     const plan = templatePlan(title, answers);
-    savePlan(goalId, answers, plan, "template");
+    await savePlan(goalId, answers, plan, "template");
     return NextResponse.json({ source: "template", plan });
   }
 
@@ -121,7 +123,7 @@ ${Object.entries(answers)
 
     if (!res.ok) {
       const plan = templatePlan(title, answers);
-      savePlan(goalId, answers, plan, "template");
+      await savePlan(goalId, answers, plan, "template");
       return NextResponse.json({ source: "template", plan });
     }
 
@@ -134,12 +136,12 @@ ${Object.entries(answers)
 
     const finalPlan = plan.length > 0 ? plan : templatePlan(title, answers);
     const source = plan.length > 0 ? "ai" : "template";
-    savePlan(goalId, answers, finalPlan, source);
+    await savePlan(goalId, answers, finalPlan, source);
 
     return NextResponse.json({ source, plan: finalPlan });
   } catch {
     const plan = templatePlan(title, answers);
-    savePlan(goalId, answers, plan, "template");
+    await savePlan(goalId, answers, plan, "template");
     return NextResponse.json({ source: "template", plan });
   }
 }

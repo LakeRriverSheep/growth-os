@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { dbGet, dbAll, dbRun, type Row } from "@/lib/db";
 
 // GET /api/records          → 返回全部有记录的日期列表
 // GET /api/records?date=XX  → 返回某一天记录
@@ -7,15 +7,13 @@ export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get("date");
 
   if (date) {
-    const row = db
-      .prepare("SELECT * FROM records WHERE date = ?")
-      .get(date) as Record<string, unknown> | undefined;
+    const row = await dbGet<Row>("SELECT * FROM records WHERE date = ?", date);
     return NextResponse.json(row ?? null);
   }
 
-  const rows = db
-    .prepare("SELECT date, done FROM records ORDER BY date DESC")
-    .all() as { date: string; done: number }[];
+  const rows = await dbAll<{ date: string; done: number }>(
+    "SELECT date, done FROM records ORDER BY date DESC",
+  );
   return NextResponse.json(rows);
 }
 
@@ -28,7 +26,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "date required" }, { status: 400 });
   }
 
-  db.prepare(
+  await dbRun(
     `INSERT INTO records (date, training, diet, calories, done, updated_at)
      VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))
      ON CONFLICT(date) DO UPDATE SET
@@ -37,7 +35,12 @@ export async function POST(req: NextRequest) {
        calories = excluded.calories,
        done = excluded.done,
        updated_at = excluded.updated_at`,
-  ).run(date, training, diet, calories, done ? 1 : 0);
+    date,
+    training,
+    diet,
+    calories,
+    done ? 1 : 0,
+  );
 
   return NextResponse.json({ ok: true });
 }
