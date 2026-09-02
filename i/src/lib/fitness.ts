@@ -1,40 +1,48 @@
-// 健身计划生成引擎：运动库 + 分化逻辑 + 场地分配 + 营养计算 + 渐进周期
-// 参考 Strong / JeFit 等专业训练 App 的动作表结构：动作 × 肌群 × 组次 × 负重 × 休息
+// 健身计划生成引擎 v3
+// 结构参考 Strong / JeFit 类训练 App：部位日排序 × 起始重量 × 练前练后餐 × 采购清单
 
 export type FitnessInput = {
   targets: string[];
+  parts: string[]; // 想练的部位，按点击顺序 = 每周训练顺序（空 = 自动分化）
   places: string[];
-  gymFrom?: string; // 从家 / 从公司 / 家或公司都行
-  gymDistance: string;
+  gymPoints: { point: string; distance: string }[]; // 出发点（可多选）+ 各点距离
   weekdays: string[];
-  daySlots?: Record<string, string>; // 周一~周日 → 时段
-  slots?: string[]; // 兼容旧数据
-  equipment: string[];
+  daySlots: Record<string, string>; // 周几 → 清晨/午间/傍晚/夜间/暂定
+  equipment: string[]; // 细化器械
   profile: {
     gender: string;
     age: string;
     height: string;
     weight: string;
     bodyFat: string;
-    goalWeight?: string; // 目标体重（选填）
+    goalWeight?: string;
     exp: string;
   };
 };
 
 export type Exercise = {
   name: string;
-  muscle: string; // 目标肌群
-  setsReps: string; // 4 × 8-12
+  muscle: string;
+  startWeight: string; // 起始重量参考
+  setsReps: string;
   rest: string;
-  load: string; // 负重建议
+  cue: string; // 动作要点
 };
 export type DayPlan = {
   day: string;
   type: string;
-  place: string; // 健身房 / 家里 / 户外
+  place: string;
   slot: string;
-  minutes: number; // 预计训练时长
+  minutes: number;
   exercises: Exercise[];
+};
+export type MealPlan = {
+  preWorkout: { when: string; items: string[] };
+  postWorkout: { when: string; items: string[] };
+  meals: { name: string; items: string[] }[];
+  shopping: { item: string; amount: string; note: string }[];
+  channels: { name: string; why: string }[];
+  gear: { item: string; price: string; why: string }[];
 };
 export type FitnessPlan = {
   overview: {
@@ -42,7 +50,7 @@ export type FitnessPlan = {
     daysPerWeek: number;
     gymDays: number;
     homeDays: number;
-    timeline: string; // 目标体重预计达标周期
+    timeline: string;
   };
   macros: {
     bmr: number;
@@ -54,54 +62,107 @@ export type FitnessPlan = {
     fat: number;
     note: string;
   };
+  meals: MealPlan;
   warmup: string[];
   schedule: DayPlan[];
   progression: { week: string; focus: string; how: string }[];
   notes: string[];
 };
 
-// ---------- 运动库（器械 × 动作模式，含目标肌群） ----------
+// ---------- 细化运动库 ----------
 type Move = {
   name: string;
   pattern: "蹲" | "推" | "拉" | "髋" | "核心";
   muscle: string;
   compound: boolean;
+  cue: string;
 };
 
 const LIB: Record<string, Move[]> = {
-  "杠铃哑铃": [
-    { name: "杠铃深蹲", pattern: "蹲", muscle: "股四头 · 臀", compound: true },
-    { name: "哑铃卧推", pattern: "推", muscle: "胸 · 前束", compound: true },
-    { name: "杠铃罗马尼亚硬拉", pattern: "髋", muscle: "腘绳 · 臀 · 下背", compound: true },
-    { name: "哑铃划船", pattern: "拉", muscle: "背 · 二头", compound: true },
-    { name: "哑铃站姿肩推", pattern: "推", muscle: "肩 · 三头", compound: true },
-    { name: "保加利亚分腿蹲", pattern: "蹲", muscle: "股四头 · 臀", compound: true },
-    { name: "哑铃弯举", pattern: "拉", muscle: "二头", compound: false },
-    { name: "哑铃臂屈伸", pattern: "推", muscle: "三头", compound: false },
+  杠铃: [
+    { name: "杠铃深蹲", pattern: "蹲", muscle: "股四头 · 臀", compound: true, cue: "下蹲到髋低于膝盖，起身先顶髋" },
+    { name: "杠铃卧推", pattern: "推", muscle: "胸 · 前束", compound: true, cue: "肩胛后缩下沉，杆落在胸骨中下段" },
+    { name: "杠铃罗马尼亚硬拉", pattern: "髋", muscle: "腘绳 · 臀 · 下背", compound: true, cue: "杆贴小腿滑，感受大腿后侧拉伸" },
+    { name: "杠铃划船", pattern: "拉", muscle: "背 · 二头", compound: true, cue: "躯干前倾 45°，肘贴身体向后拉" },
+    { name: "杠铃站姿肩推", pattern: "推", muscle: "肩 · 三头", compound: true, cue: "收紧核心不后仰，杆过头顶" },
   ],
-  固定器械: [
-    { name: "腿举", pattern: "蹲", muscle: "股四头 · 臀", compound: true },
-    { name: "坐姿推胸", pattern: "推", muscle: "胸 · 前束", compound: true },
-    { name: "高位下拉", pattern: "拉", muscle: "背 · 二头", compound: true },
-    { name: "坐姿划船", pattern: "拉", muscle: "背 · 后束", compound: true },
-    { name: "腿屈伸", pattern: "蹲", muscle: "股四头", compound: false },
-    { name: "腿弯举", pattern: "髋", muscle: "腘绳", compound: false },
+  哑铃: [
+    { name: "哑铃卧推", pattern: "推", muscle: "胸 · 前束", compound: true, cue: "下放到大臂与地面平行，顶峰挤压胸" },
+    { name: "哑铃划船", pattern: "拉", muscle: "背 · 二头", compound: true, cue: "单膝跪凳，肘向上向后，不转体" },
+    { name: "哑铃站姿肩推", pattern: "推", muscle: "肩 · 三头", compound: true, cue: "哑铃举到耳朵两侧，推起不锁死肘" },
+    { name: "保加利亚分腿蹲", pattern: "蹲", muscle: "股四头 · 臀", compound: true, cue: "后腿搭凳，前腿发力，躯干微前倾" },
+    { name: "哑铃弯举", pattern: "拉", muscle: "二头", compound: false, cue: "上臂固定不动，慢下放 2 秒" },
+    { name: "哑铃臂屈伸", pattern: "推", muscle: "三头", compound: false, cue: "肘指向天花板，只动小臂" },
+  ],
+  龙门架: [
+    { name: "绳索夹胸", pattern: "推", muscle: "胸", compound: false, cue: "手肘微屈定角，想象环抱大树" },
+    { name: "绳索下压", pattern: "推", muscle: "三头", compound: false, cue: "大臂夹紧身体，只伸小臂" },
+    { name: "绳索划船", pattern: "拉", muscle: "背 · 后束", compound: true, cue: "拉到腹部，肩胛先收再屈肘" },
+    { name: "绳索面拉", pattern: "拉", muscle: "后束 · 上背", compound: false, cue: "拉向额头，外旋肩膀护肩" },
+    { name: "绳索弯举", pattern: "拉", muscle: "二头", compound: false, cue: "恒定张力，顶端停留 1 秒" },
+  ],
+  史密斯机: [
+    { name: "史密斯深蹲", pattern: "蹲", muscle: "股四头 · 臀", compound: true, cue: "脚略向前站，靠背稳杆" },
+    { name: "史密斯卧推", pattern: "推", muscle: "胸 · 前束", compound: true, cue: "轨迹固定，专注胸部发力" },
+    { name: "史密斯划船", pattern: "拉", muscle: "背 · 二头", compound: true, cue: "俯身稳定，拉向下腹部" },
+  ],
+  坐姿器械: [
+    { name: "坐姿推胸", pattern: "推", muscle: "胸 · 前束", compound: true, cue: "靠背贴紧，推出时呼气" },
+    { name: "高位下拉", pattern: "拉", muscle: "背 · 二头", compound: true, cue: "拉到锁骨，回放控制 2 秒" },
+    { name: "坐姿划船", pattern: "拉", muscle: "背 · 后束", compound: true, cue: "挺胸不弓腰，拉到小腹" },
+    { name: "腿举", pattern: "蹲", muscle: "股四头 · 臀", compound: true, cue: "膝盖不锁死，脚放平台中高位" },
+    { name: "腿屈伸", pattern: "蹲", muscle: "股四头", compound: false, cue: "顶峰收缩 1 秒，慢放" },
+    { name: "腿弯举", pattern: "髋", muscle: "腘绳", compound: false, cue: "髋贴紧凳面，感受大腿后侧" },
   ],
   弹力带: [
-    { name: "弹力带深蹲", pattern: "蹲", muscle: "股四头 · 臀", compound: true },
-    { name: "弹力带推胸", pattern: "推", muscle: "胸 · 三头", compound: true },
-    { name: "弹力带划船", pattern: "拉", muscle: "背 · 二头", compound: true },
-    { name: "弹力带肩推", pattern: "推", muscle: "肩 · 三头", compound: true },
-    { name: "弹力带硬拉", pattern: "髋", muscle: "腘绳 · 臀", compound: true },
+    { name: "弹力带深蹲", pattern: "蹲", muscle: "股四头 · 臀", compound: true, cue: "带踩脚下过肩，下蹲对抗阻力" },
+    { name: "弹力带推胸", pattern: "推", muscle: "胸 · 三头", compound: true, cue: "带绕背后，向前推出挤压胸" },
+    { name: "弹力带划船", pattern: "拉", muscle: "背 · 二头", compound: true, cue: "带踩脚下或绕固定物，向后拉" },
+    { name: "弹力带肩推", pattern: "推", muscle: "肩 · 三头", compound: true, cue: "带踩脚下，向上推起" },
+    { name: "弹力带硬拉", pattern: "髋", muscle: "腘绳 · 臀", compound: true, cue: "带踩脚下，髋部折叠起身夹臀" },
+  ],
+  单双杠: [
+    { name: "引体向上（可弹力带辅助）", pattern: "拉", muscle: "背 · 二头", compound: true, cue: "全程不用惯性，下巴过杠" },
+    { name: "双杠臂屈伸", pattern: "推", muscle: "胸 · 三头", compound: true, cue: "身体前倾练胸，直立练三头" },
+    { name: "悬垂举腿", pattern: "核心", muscle: "核心", compound: false, cue: "不摆动，骨盆后倾卷腿" },
   ],
   徒手: [
-    { name: "俯卧撑（或跪姿）", pattern: "推", muscle: "胸 · 三头", compound: true },
-    { name: "徒手深蹲", pattern: "蹲", muscle: "股四头 · 臀", compound: true },
-    { name: "臀桥", pattern: "髋", muscle: "臀 · 腘绳", compound: true },
-    { name: "反向划船（桌下）", pattern: "拉", muscle: "背 · 二头", compound: true },
-    { name: "弓步蹲", pattern: "蹲", muscle: "股四头 · 臀", compound: true },
-    { name: "平板支撑", pattern: "核心", muscle: "核心", compound: false },
+    { name: "俯卧撑（或跪姿）", pattern: "推", muscle: "胸 · 三头", compound: true, cue: "身体一条线，胸贴近地面" },
+    { name: "徒手深蹲", pattern: "蹲", muscle: "股四头 · 臀", compound: true, cue: "臀部后坐，膝盖对脚尖" },
+    { name: "弓步蹲", pattern: "蹲", muscle: "股四头 · 臀", compound: true, cue: "前腿发力，后腿膝盖不落地" },
+    { name: "臀桥", pattern: "髋", muscle: "臀 · 腘绳", compound: true, cue: "顶峰夹臀 2 秒，不顶腰" },
+    { name: "反向划船（桌下）", pattern: "拉", muscle: "背 · 二头", compound: true, cue: "身体斜挂桌下，胸拉向桌沿" },
+    { name: "平板支撑", pattern: "核心", muscle: "核心", compound: false, cue: "收紧腰腹不塌腰，臀不翘" },
   ],
+};
+
+// 起始重量系数（相对体重，男；女 × 0.7；新手 × 0.7；老手 × 1.15）
+const START_KG: Record<string, number> = {
+  杠铃深蹲: 0.5,
+  杠铃卧推: 0.35,
+  杠铃罗马尼亚硬拉: 0.6,
+  杠铃划船: 0.35,
+  杠铃站姿肩推: 0.25,
+  哑铃卧推: 0.15,
+  哑铃划船: 0.2,
+  哑铃站姿肩推: 0.12,
+  保加利亚分腿蹲: 0.1,
+  哑铃弯举: 0.08,
+  哑铃臂屈伸: 0.08,
+  绳索夹胸: 0.12,
+  绳索下压: 0.12,
+  绳索划船: 0.3,
+  绳索面拉: 0.1,
+  绳索弯举: 0.08,
+  史密斯深蹲: 0.4,
+  史密斯卧推: 0.3,
+  史密斯划船: 0.3,
+  坐姿推胸: 0.4,
+  高位下拉: 0.4,
+  坐姿划船: 0.35,
+  腿举: 1.0,
+  腿屈伸: 0.25,
+  腿弯举: 0.2,
 };
 
 const ALL_DAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -121,20 +182,29 @@ function pick(poolMoves: Move[], pattern: Move["pattern"], n: number): Move[] {
   return out;
 }
 
-function toEx(moves: Move[], exp: string): Exercise[] {
-  const beginner = exp.startsWith("新手");
+function startWeight(name: string, kg: number, gender: string, exp: string): string {
+  const coef = START_KG[name];
+  if (!coef) {
+    if (name.includes("引体")) return "弹力带辅助起步";
+    return "自重";
+  }
+  let w = kg * coef;
+  if (gender === "女") w *= 0.7;
+  if (exp.startsWith("新手")) w *= 0.7;
+  if (exp.startsWith("老手")) w *= 1.15;
+  const rounded = Math.max(2.5, Math.round(w / 2.5) * 2.5);
+  const perHand = name.startsWith("哑铃");
+  return `${rounded}kg${perHand ? " / 只" : ""}`;
+}
+
+function toEx(moves: Move[], exp: string, kg: number, gender: string): Exercise[] {
   return moves.map((m, i) => ({
     name: m.name,
     muscle: m.muscle,
+    startWeight: startWeight(m.name, kg, gender, exp),
     setsReps: m.compound ? "4 × 8-12" : i === moves.length - 1 ? "3 × 力竭" : "3 × 12-15",
     rest: m.compound ? "90-120 秒" : "60 秒",
-    load: m.compound
-      ? beginner
-        ? "先学动作：空杆/最轻配重，动作标准了再加"
-        : "8-12RM：最后 1-2 次接近力竭但动作不变形"
-      : beginner
-        ? "轻重量找肌肉发力感，不追求重"
-        : "12-15RM，最后一组可做到力竭",
+    cue: m.cue,
   }));
 }
 
@@ -142,47 +212,73 @@ function setCount(ex: Exercise): number {
   return parseInt(ex.setsReps) || 3;
 }
 
-// ---------- 分化逻辑 ----------
+// ---------- 部位日模板（用户自选顺序） ----------
 type DayType = { name: string; mix: { 蹲: number; 推: number; 拉: number; 髋: number } };
 
-function dayTypes(days: number): DayType[] {
+const PART_TPL: Record<string, DayType> = {
+  胸: { name: "胸日", mix: { 蹲: 0, 推: 3, 拉: 1, 髋: 0 } },
+  背: { name: "背日", mix: { 蹲: 0, 推: 1, 拉: 3, 髋: 0 } },
+  肩: { name: "肩日", mix: { 蹲: 0, 推: 3, 拉: 1, 髋: 0 } },
+  腿: { name: "腿日", mix: { 蹲: 2, 推: 0, 拉: 0, 髋: 2 } },
+  手臂: { name: "手臂日", mix: { 蹲: 0, 推: 2, 拉: 2, 髋: 0 } },
+  臀: { name: "臀日", mix: { 蹲: 2, 推: 0, 拉: 0, 髋: 2 } },
+  核心: { name: "核心日", mix: { 蹲: 1, 推: 1, 拉: 1, 髋: 1 } },
+};
+
+function dayTypes(days: number, parts: string[]): { types: DayType[]; custom: boolean } {
+  const valid = parts.filter((p) => PART_TPL[p]);
+  if (valid.length > 0) {
+    const types = Array.from({ length: days }, (_, i) => PART_TPL[valid[i % valid.length]]);
+    return { types, custom: true };
+  }
   const full = { 蹲: 1, 推: 1, 拉: 1, 髋: 1 };
   switch (days) {
     case 1:
     case 2:
-      return Array.from({ length: days }, () => ({ name: "全身训练", mix: full }));
+      return { types: Array.from({ length: days }, () => ({ name: "全身训练", mix: full })), custom: false };
     case 3:
-      return [
-        { name: "全身 A（下肢主导）", mix: { 蹲: 2, 推: 1, 拉: 1, 髋: 1 } },
-        { name: "全身 B（上肢主导）", mix: { 蹲: 1, 推: 2, 拉: 2, 髋: 0 } },
-        { name: "全身 C（均衡）", mix: full },
-      ];
+      return {
+        types: [
+          { name: "全身 A（下肢主导）", mix: { 蹲: 2, 推: 1, 拉: 1, 髋: 1 } },
+          { name: "全身 B（上肢主导）", mix: { 蹲: 1, 推: 2, 拉: 2, 髋: 0 } },
+          { name: "全身 C（均衡）", mix: full },
+        ],
+        custom: false,
+      };
     case 4:
-      return [
-        { name: "上肢日（胸肩三头）", mix: { 蹲: 0, 推: 3, 拉: 2, 髋: 0 } },
-        { name: "下肢日（腿臀）", mix: { 蹲: 2, 推: 0, 拉: 0, 髋: 2 } },
-        { name: "上肢日（背二头）", mix: { 蹲: 0, 推: 2, 拉: 3, 髋: 0 } },
-        { name: "下肢日（腿核心）", mix: { 蹲: 2, 推: 0, 拉: 0, 髋: 1 } },
-      ];
+      return {
+        types: [
+          { name: "上肢日（胸肩三头）", mix: { 蹲: 0, 推: 3, 拉: 2, 髋: 0 } },
+          { name: "下肢日（腿臀）", mix: { 蹲: 2, 推: 0, 拉: 0, 髋: 2 } },
+          { name: "上肢日（背二头）", mix: { 蹲: 0, 推: 2, 拉: 3, 髋: 0 } },
+          { name: "下肢日（腿核心）", mix: { 蹲: 2, 推: 0, 拉: 0, 髋: 1 } },
+        ],
+        custom: false,
+      };
     case 5:
-      return [
-        { name: "推日（胸肩三头）", mix: { 蹲: 0, 推: 3, 拉: 1, 髋: 0 } },
-        { name: "拉日（背二头）", mix: { 蹲: 0, 推: 1, 拉: 3, 髋: 0 } },
-        { name: "腿日（蹲为主）", mix: { 蹲: 3, 推: 0, 拉: 0, 髋: 1 } },
-        { name: "上肢日（均衡）", mix: { 蹲: 0, 推: 2, 拉: 2, 髋: 0 } },
-        { name: "腿日（髋为主）", mix: { 蹲: 1, 推: 0, 拉: 0, 髋: 3 } },
-      ];
+      return {
+        types: [
+          { name: "推日（胸肩三头）", mix: { 蹲: 0, 推: 3, 拉: 1, 髋: 0 } },
+          { name: "拉日（背二头）", mix: { 蹲: 0, 推: 1, 拉: 3, 髋: 0 } },
+          { name: "腿日（蹲为主）", mix: { 蹲: 3, 推: 0, 拉: 0, 髋: 1 } },
+          { name: "上肢日（均衡）", mix: { 蹲: 0, 推: 2, 拉: 2, 髋: 0 } },
+          { name: "腿日（髋为主）", mix: { 蹲: 1, 推: 0, 拉: 0, 髋: 3 } },
+        ],
+        custom: false,
+      };
     default:
-      // 6-7 天：推拉腿双循环
-      return [
-        { name: "推日", mix: { 蹲: 0, 推: 3, 拉: 1, 髋: 0 } },
-        { name: "拉日", mix: { 蹲: 0, 推: 1, 拉: 3, 髋: 0 } },
-        { name: "腿日", mix: { 蹲: 2, 推: 0, 拉: 0, 髋: 2 } },
-        { name: "推日", mix: { 蹲: 0, 推: 3, 拉: 1, 髋: 0 } },
-        { name: "拉日", mix: { 蹲: 0, 推: 1, 拉: 3, 髋: 0 } },
-        { name: "腿日", mix: { 蹲: 2, 推: 0, 拉: 0, 髋: 2 } },
-        ...(days === 7 ? [{ name: "全身+核心（轻量）", mix: { 蹲: 1, 推: 1, 拉: 1, 髋: 1 } }] : []),
-      ];
+      return {
+        types: [
+          { name: "推日", mix: { 蹲: 0, 推: 3, 拉: 1, 髋: 0 } },
+          { name: "拉日", mix: { 蹲: 0, 推: 1, 拉: 3, 髋: 0 } },
+          { name: "腿日", mix: { 蹲: 2, 推: 0, 拉: 0, 髋: 2 } },
+          { name: "推日", mix: { 蹲: 0, 推: 3, 拉: 1, 髋: 0 } },
+          { name: "拉日", mix: { 蹲: 0, 推: 1, 拉: 3, 髋: 0 } },
+          { name: "腿日", mix: { 蹲: 2, 推: 0, 拉: 0, 髋: 2 } },
+          ...(days === 7 ? [{ name: "全身+核心（轻量）", mix: { 蹲: 1, 推: 1, 拉: 1, 髋: 1 } }] : []),
+        ],
+        custom: false,
+      };
   }
 }
 
@@ -229,34 +325,93 @@ function nutrition(f: FitnessInput) {
   return { bmr, tdee, targetKcal, targetLabel, protein, carb, fat, note };
 }
 
+// ---------- 健身餐 / 采购 / 厨具 ----------
+function mealPlan(f: FitnessInput, macros: ReturnType<typeof nutrition>): MealPlan {
+  const P = macros.protein;
+  const wantCut = f.targets.includes("减脂") && !f.targets.includes("增肌");
+
+  // 鸡胸承担蛋白目标的 40%（21g蛋白/100g），其余靠蛋奶
+  const chickenDaily = Math.round(((P * 0.4) / 21) * 100 / 50) * 50;
+  const chickenWeekly = Math.round((chickenDaily * 7) / 100) / 10;
+  const lunchG = chickenDaily >= 200 ? 150 : 100;
+
+  return {
+    preWorkout: {
+      when: "练前 60-90 分钟",
+      items: [
+        "香蕉 1 根 + 全麦面包 1 片（快碳供能）",
+        "或燕麦 40g 冲泡 + 鸡蛋 1 个",
+        "别吃撑，七成饱，练时胃不能胀",
+      ],
+    },
+    postWorkout: {
+      when: "练后 30-60 分钟内（最重要的一餐）",
+      items: [
+        `蛋白质 30g+：鸡胸 150g 或 鸡蛋 3 个 + 牛奶 250ml（或蛋白粉 1 勺）`,
+        `碳水 40-60g：米饭 1 碗 / 红薯 200g${wantCut ? "（减脂期碳水减半，蛋白不减）" : ""}`,
+        "这餐吃不好，今天训练效果打 6 折",
+      ],
+    },
+    meals: [
+      { name: "早餐", items: ["鸡蛋 2 个 + 燕麦 50g", "牛奶 250ml", "香蕉或苹果 1 个"] },
+      { name: "午餐", items: [`鸡胸/牛肉 ${lunchG}g`, "米饭 1-1.5 碗", "蔬菜不限量（西兰花/菠菜）"] },
+      { name: "加餐（下午）", items: ["希腊酸奶 1 杯 或 鸡蛋白 2 个", "坚果一小把（10g，别多抓）"] },
+      { name: "晚餐", items: [`鸡胸/鱼虾 ${lunchG}g`, "红薯 150g 或 米饭半碗", "蔬菜不限量"] },
+    ],
+    shopping: [
+      { item: "鸡胸肉（冷冻）", amount: `${chickenWeekly}kg / 周`, note: "山姆/麦德龙囤一个月更划算" },
+      { item: "鸡蛋", amount: "14 个 / 周", note: "每天 2 个，最便宜的蛋白来源" },
+      { item: "燕麦", amount: "500g / 2 周", note: "无糖即食款，练前餐主力" },
+      { item: "红薯", amount: "1kg / 周", note: "电饭煲一锅蒸，练后慢碳" },
+      { item: "大米", amount: "常备", note: "按碳水目标增减" },
+      { item: "西兰花/菠菜", amount: "2kg / 周", note: "体积占半盘，撑饱不超标" },
+      { item: "香蕉", amount: "7 根 / 周", note: "练前 1 根，快碳" },
+      { item: "牛奶", amount: "1.5L / 周", note: "全脂，每天 250ml" },
+      { item: "希腊酸奶", amount: "4 杯 / 周", note: "无糖高蛋白，下午加餐" },
+    ],
+    channels: [
+      { name: "钱大妈 / 社区菜市场", why: "鸡胸鸡蛋当日买，最便宜，晚上 8 点后打折" },
+      { name: "美团买菜 / 朴朴", why: "30 分钟送到楼下，临时缺货救急，适合周中补菜" },
+      { name: "山姆 / 麦德龙", why: "冷冻鸡胸、虾仁按箱囤，均价比零售低 30%，一个月去一次" },
+      { name: "京东自营", why: "蛋白粉、肌酸、鱼油、维生素D，只买大牌自营，别买杂牌" },
+    ],
+    gear: [
+      { item: "食物秤", price: "¥20-30", why: "必备。不称重的热量计划全是自欺欺人" },
+      { item: "不粘平底锅 24cm", price: "¥60-100", why: "少油煎鸡胸煎蛋，一口锅顶半壁江山" },
+      { item: "电饭煲（带蒸笼）", price: "¥100-150", why: "下层米饭上层蒸红薯西兰花鸡胸，一锅出全餐" },
+      { item: "密封储物盒 ×3", price: "¥30", why: "周末预处理 3 天的量，工作日直接热" },
+      { item: "砧板 + 菜刀", price: "¥50", why: "生熟分开买两块" },
+      { item: "摇摇杯", price: "¥20", why: "蛋白粉/牛奶随冲随喝" },
+    ],
+  };
+}
+
 // ---------- 目标体重周期 ----------
 function timeline(f: FitnessInput): string {
   const kg = parseFloat(f.profile.weight) || 65;
   const goal = parseFloat(f.profile.goalWeight ?? "");
-  if (!goal || Math.abs(goal - kg) < 0.5) {
-    return "未设目标体重 · 按长期习惯养成为主";
-  }
+  if (!goal || Math.abs(goal - kg) < 0.5) return "未设目标体重 · 按长期习惯养成为主";
   const delta = goal - kg;
   const cut = f.targets.includes("减脂") && !f.targets.includes("增肌");
   const weeks = Math.max(2, Math.ceil(Math.abs(delta) / (cut ? 0.35 : 0.25)));
-  return delta > 0
-    ? `${kg}kg → ${goal}kg（约 ${weeks} 周）`
-    : `${kg}kg → ${goal}kg（约 ${weeks} 周）`;
+  return `${kg}kg → ${goal}kg（约 ${weeks} 周）`;
 }
 
 // ---------- 主生成器 ----------
 export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
+  const kg = parseFloat(f.profile.weight) || 65;
+  const gender = f.profile.gender;
   const macros = nutrition(f);
   const exp = f.profile.exp;
 
   // 场地与器械池：大肌群日用健身房器械，小肌群/在家日用家庭器械
   const useGym = f.places.includes("健身房");
   const useHome = f.places.includes("家里");
-  const gymPool = pool(f.equipment.length ? f.equipment : ["杠铃哑铃", "固定器械"]);
-  const homeEq = f.equipment.filter((e) => e !== "固定器械");
+  const gymPool = pool(f.equipment.length ? f.equipment : ["杠铃", "哑铃", "坐姿器械"]);
+  const homeEq = f.equipment.filter((e) => ["哑铃", "弹力带", "单双杠", "徒手"].includes(e));
   const homePool = pool(homeEq.length ? homeEq : ["徒手", "弹力带"]);
 
-  const types = dayTypes(f.weekdays.length);
+  const { types, custom } = dayTypes(f.weekdays.length, f.parts);
 
   const schedule: DayPlan[] = ALL_DAYS.map((d) => {
     const idx = f.weekdays.indexOf(d);
@@ -281,21 +436,22 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
       place = "户外";
       moves = gymPool;
     }
-    const slot = f.daySlots?.[d] ?? f.slots?.[0] ?? "傍晚";
+    const slot = f.daySlots?.[d] ?? "暂定";
 
     const ex: Exercise[] = [
-      ...toEx(pick(moves, "蹲", t.mix["蹲"]), exp),
-      ...toEx(pick(moves, "推", t.mix["推"]), exp),
-      ...toEx(pick(moves, "拉", t.mix["拉"]), exp),
-      ...toEx(pick(moves, "髋", t.mix["髋"]), exp),
+      ...toEx(pick(moves, "蹲", t.mix["蹲"]), exp, kg, gender),
+      ...toEx(pick(moves, "推", t.mix["推"]), exp, kg, gender),
+      ...toEx(pick(moves, "拉", t.mix["拉"]), exp, kg, gender),
+      ...toEx(pick(moves, "髋", t.mix["髋"]), exp, kg, gender),
     ];
     // 每次训练收尾核心
     ex.push({
       name: "平板支撑",
       muscle: "核心",
+      startWeight: "自重",
       setsReps: "3 × 45-60 秒",
       rest: "45 秒",
-      load: "收紧腰腹不塌腰，撑不住就停——腰塌了立刻结束",
+      cue: "收紧腰腹不塌腰，撑不住就停",
     });
 
     // 预计时长：热身 10 分钟 + 每组约 2.5 分钟（含组间休息）
@@ -308,23 +464,27 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
   const homeDays = schedule.filter((d) => d.place === "家里").length;
 
   const notes: string[] = [
-    "渐进超负荷：同样的动作，每周比上周多重 2.5kg 或多做 1-2 次，记进「每日记录」——这是进步的唯一证据。",
+    "渐进超负荷：同样的动作，每周比上周多重 2.5kg 或多做 1-2 次，记进记录页——这是进步的唯一证据。",
     `蛋白质 ${macros.protein}g 分 4 餐吃（每餐 ≈${Math.round(macros.protein / 4)}g），练后那餐必须含 30g+。`,
     "每天喝水 = 体重(kg) × 35ml，睡够 7.5 小时。这两条做不到，吃练计划全白搭。",
   ];
 
-  if (f.gymDistance.includes("很远")) {
+  const farPoint = f.gymPoints.find((p) => p.distance.includes("很远"));
+  if (farPoint) {
     notes.unshift(
-      `⚠️ 健身房距${f.gymFrom === "从公司" ? "公司" : "家"} >5km：通勤会消耗训练意志。建议 ① 换近的健身房；② 或把小肌群训练改为在家用弹力带完成。`,
+      `⚠️ 健身房距「${farPoint.point}」>5km：通勤会消耗训练意志。建议 ① 换近的健身房；② 或把小肌群日改为在家用弹力带完成。`,
     );
   }
   if (useGym && useHome) {
     notes.push(
-      `混合场地已排好：${gymDays} 天去健身房（大肌群），${homeDays} 天在家练（小肌群+核心），照着周排期表执行，不用自己纠结今天去哪。`,
+      `混合场地已排好：${gymDays} 天去健身房（大肌群），${homeDays} 天在家练（小肌群+核心），照着周排期执行，不用自己纠结今天去哪。`,
     );
   }
-  if (f.gymFrom === "从公司") {
-    notes.push("你从公司出发去健身房：健身包早上带去上班，下班直接练，回家这段路留给放松拉伸。");
+  if (f.gymPoints.some((p) => p.point === "学校")) {
+    notes.push("从学校出发练：书包里备好速干T恤+水杯，下课直接去，练完再回宿舍——中间一回宿舍就会躺平。");
+  }
+  if (custom) {
+    notes.push("你自选了部位顺序：每个训练日主攻一个部位，收尾的平板支撑保证核心每天都在练。");
   }
   const bf = parseFloat(f.profile.bodyFat);
   if (bf > 0) {
@@ -335,8 +495,9 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
 
   return {
     overview: {
-      splitName:
-        f.weekdays.length <= 2
+      splitName: custom
+        ? "自选部位分化"
+        : f.weekdays.length <= 2
           ? "全身分化"
           : f.weekdays.length === 3
             ? "全身三分化（A/B/C）"
@@ -349,6 +510,7 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
       timeline: timeline(f),
     },
     macros,
+    meals: mealPlan(f, macros),
     warmup: [
       "5 分钟提升心率：快走 / 划船机 / 开合跳（微喘但不累）",
       "当天要练的关节动态活动：肩绕环、髋绕环、徒手深蹲各 10 次",
@@ -356,7 +518,7 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
     ],
     schedule,
     progression: [
-      { week: "第 1 周", focus: "建立基线", how: "每个动作找到「8-12 次接近力竭」的重量并记下来，这是你的基线，别瞎冲。" },
+      { week: "第 1 周", focus: "建立基线", how: "按表里「起始重量」开练，找到每个动作 8-12 次接近力竭的实际重量并记下来，别瞎冲。" },
       { week: "第 2-3 周", focus: "线性加重", how: "每周比基线 +2.5kg（小肌群 +1-2 次）。加重后做不满 8 次就退回上一档。" },
       { week: "第 4 周", focus: "减量恢复", how: "重量降 30%，让关节和神经恢复。第 5 周带着新基线继续涨。" },
     ],
