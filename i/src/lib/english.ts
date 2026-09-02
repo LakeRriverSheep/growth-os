@@ -73,9 +73,13 @@ function dailyTasks(f: EnglishInput, totalMin: number): DailyTask[] {
   const weakSkills = weak.filter((w) => w !== "词汇");
   const maintain = ALL_SKILLS.filter((s) => s !== "词汇" && !weakSkills.includes(s));
 
-  // 薄弱项拿走剩余时间的 75%，均分（雅思口语上限单任务 40 分钟）
+  // 薄弱项拿走剩余时间的 75%，均分（单任务上限 45 分钟）
   if (weakSkills.length > 0) {
-    const per = round5((remaining * 0.75) / weakSkills.length);
+    let per = round5((remaining * 0.75) / weakSkills.length);
+    // 预算太小时（如每天 0.5h）压缩单任务时长，避免任务总量超过当天预算
+    if (vocabMin + per * weakSkills.length > totalMin) {
+      per = Math.max(10, Math.floor((totalMin - vocabMin) / weakSkills.length / 5) * 5);
+    }
     for (const s of weakSkills) {
       tasks.push({ ...SKILL_TASKS[s], minutes: Math.min(45, per) });
     }
