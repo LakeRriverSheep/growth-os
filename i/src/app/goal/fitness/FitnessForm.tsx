@@ -1,256 +1,44 @@
 "use client";
 import Link from "next/link";
-
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { FitnessInput, FitnessPlan } from "@/lib/fitness";
 import { movesByEquipment } from "@/lib/fitness";
 import PlanView from "./PlanView";
+import Card from "./_components/Card";
+import Section from "./_components/Section";
+import UserPicksPicker from "./_components/UserPicksPicker";
+import ProfileSection from "./_components/ProfileSection";
+import {
+  TARGETS,
+  PARTS,
+  PLACES,
+  GYM_POINTS,
+  DISTANCES,
+  WEEKDAYS,
+  SLOT_NAMES,
+  SLOT_SUB,
+  EQUIPMENT,
+} from "./_constants";
 
-// ---------- 选项定义 ----------
-type Opt = { value: string; label: string; sub?: string; emoji: string };
+const EMPTY_PROFILE = { gender: "", age: "", height: "", weight: "", bodyFat: "", goalWeight: "", exp: "" };
 
-const TARGETS: Opt[] = [
-  { value: "减脂", label: "减脂", sub: "降体脂 · 见腹肌", emoji: "🔥" },
-  { value: "增肌", label: "增肌", sub: "涨维度 · 涨力量", emoji: "💪" },
-  { value: "塑形", label: "塑形", sub: "练出薄肌线条", emoji: "✨" },
-];
-
-const PARTS: Opt[] = [
-  { value: "胸", label: "胸", emoji: "🫁" },
-  { value: "背", label: "背", emoji: "🦾" },
-  { value: "肩", label: "肩", emoji: "🏔️" },
-  { value: "腿", label: "腿", emoji: "🦵" },
-  { value: "手臂", label: "手臂", emoji: "💪" },
-  { value: "臀", label: "臀", emoji: "🍑" },
-  { value: "核心", label: "核心", emoji: "🎯" },
-];
-
-const PLACES: Opt[] = [
-  { value: "健身房", label: "健身房", sub: "器械全 · 氛围强", emoji: "🏟️" },
-  { value: "家里", label: "家里", sub: "省通勤 · 随时开练", emoji: "🏠" },
-  { value: "户外", label: "户外", sub: "跑跳 · 单双杠", emoji: "🌳" },
-];
-
-const GYM_POINTS: Opt[] = [
-  { value: "家", label: "家", emoji: "🏠" },
-  { value: "学校", label: "学校", emoji: "🏫" },
-  { value: "公司", label: "公司", emoji: "🏢" },
-  { value: "其他", label: "其他", emoji: "📍" },
-];
-
-const DISTANCES: Opt[] = [
-  { value: "步行可达（≤1km）", label: "≤1km", sub: "步行可达", emoji: "🚶" },
-  { value: "近（1-3km）", label: "1-3km", sub: "骑车 10 分钟", emoji: "🚴" },
-  { value: "中等（3-5km）", label: "3-5km", sub: "通勤约 15 分钟", emoji: "🛵" },
-  { value: "很远（>5km）", label: ">5km", sub: "通勤成本高", emoji: "🚌" },
-];
-
-const WEEKDAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
-const SLOT_NAMES = ["清晨", "午间", "傍晚", "夜间", "暂定"];
-const SLOT_SUB: Record<string, string> = {
-  清晨: "6-9点",
-  午间: "12-14点",
-  傍晚: "17-20点",
-  夜间: "20-23点",
-  暂定: "还没定",
+const INITIAL_FORM: FitnessInput = {
+  targets: [],
+  parts: [],
+  places: [],
+  gymPoints: [],
+  weekdays: [],
+  daySlots: {},
+  equipment: [],
+  profile: { ...EMPTY_PROFILE },
+  userPicks: {},
 };
 
-const EQUIPMENT: Opt[] = [
-  { value: "杠铃", label: "杠铃", sub: "深蹲架 · 卧推架", emoji: "🏋️" },
-  { value: "哑铃", label: "哑铃", sub: "家里也能用", emoji: "🥇" },
-  { value: "龙门架", label: "龙门架", sub: "绳索 · 夹胸下压", emoji: "🔗" },
-  { value: "史密斯机", label: "史密斯机", sub: "固定轨迹", emoji: "⚙️" },
-  { value: "坐姿器械", label: "坐姿器械", sub: "推胸下拉腿举", emoji: "🔧" },
-  { value: "弹力带", label: "弹力带", sub: "在家神器", emoji: "🎗️" },
-  { value: "单双杠", label: "单双杠", sub: "引体 · 臂屈伸", emoji: "🤸" },
-  { value: "徒手", label: "徒手", sub: "零器械", emoji: "🧍" },
-];
-
-// ---------- 自选动作三级选择 ----------
-function UserPicksPicker({
-  form,
-  togglePick,
-}: {
-  form: FitnessInput;
-  togglePick: (part: string, name: string) => void;
-}) {
-  const lib = movesByEquipment();
-
-  // 1. 已选部位 → 这些部位涵盖的动作（按器械分组）
-  const data = useMemo(() => {
-    const partMoves: Record<string, Record<string, { name: string; popularity: number; difficulty: string }[]>> = {};
-    const parts = form.parts;
-    for (const part of parts) {
-      partMoves[part] = {};
-      for (const eq of form.equipment) {
-        const moves = (lib[eq] ?? []).filter((m) => muscleMatchesPart(m.muscle, part));
-        if (moves.length === 0) continue;
-        partMoves[part][eq] = moves
-          .map((m) => ({ name: m.name, popularity: m.popularity, difficulty: m.difficulty }))
-          .sort((a, b) => b.popularity - a.popularity);
-      }
-    }
-    return partMoves;
-  }, [form.parts, form.equipment, lib]);
-
-  const totalPicked = Object.values(form.userPicks ?? {}).reduce((s, arr) => s + arr.length, 0);
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between rounded-xl bg-zinc-900/60 px-4 py-2.5 text-xs text-zinc-400">
-        <span>已选部位 · {form.parts.length} 个</span>
-        <span className={totalPicked > 0 ? "text-emerald-400" : ""}>
-          已勾动作 · {totalPicked} 个
-          {totalPicked > 0 && " · 按你勾选顺序训练"}
-        </span>
-      </div>
-      {form.parts.map((part) => {
-        const eqMap = data[part] ?? {};
-        const eqs = Object.keys(eqMap);
-        if (eqs.length === 0) {
-          return (
-            <div key={part} className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-xs text-zinc-500">
-              「{part}」在当前器械下没有可用动作。勾上对应的器械后再来挑。
-            </div>
-          );
-        }
-        return (
-          <details key={part} open className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
-            <summary className="flex cursor-pointer items-center justify-between px-4 py-3 text-sm font-medium text-zinc-200">
-              <span>
-                🫁 {part} <span className="text-xs text-zinc-500">· {eqs.length} 种器械</span>
-              </span>
-              <span className="text-xs text-zinc-500">{(form.userPicks?.[part] ?? []).length} 已选</span>
-            </summary>
-            <div className="space-y-4 px-4 pb-4">
-              {eqs.map((eq) => (
-                <div key={eq}>
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-xs font-medium text-zinc-300">{eq}</p>
-                    <p className="text-[10px] text-zinc-600">按热度排序 🔥</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {eqMap[eq].map((m) => {
-                      const picked = (form.userPicks?.[part] ?? []).includes(m.name);
-                      const idx = (form.userPicks?.[part] ?? []).indexOf(m.name);
-                      return (
-                        <button
-                          key={m.name}
-                          onClick={() => togglePick(part, m.name)}
-                          className={`flex items-center justify-between rounded-lg border px-2.5 py-2 text-left transition-all active:scale-95 ${
-                            picked
-                              ? "border-emerald-500 bg-emerald-950/40 text-emerald-200"
-                              : "border-zinc-800 bg-zinc-950/40 text-zinc-400"
-                          }`}
-                        >
-                          <span className="flex-1 text-xs leading-tight">{m.name}</span>
-                          <span className="ml-2 flex shrink-0 items-center gap-1 text-[9px]">
-                            <span className={m.popularity >= 9 ? "text-orange-400" : "text-zinc-600"}>
-                              {m.popularity >= 9 ? "🔥" : m.popularity >= 7 ? "★" : ""}
-                            </span>
-                            {picked && (
-                              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-zinc-950">
-                                {idx + 1}
-                              </span>
-                            )}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </details>
-        );
-      })}
-      <p className="text-center text-[10px] text-zinc-600">
-        提示：🔥 = 热门首选 · ★ = 主流高效 · 数字 = 你的勾选顺序
-      </p>
-    </div>
-  );
-}
-
-// 部位 → 该动作是否归属此部位（与引擎 PART_MUSCLES + 测试规则对齐）
-function muscleMatchesPart(muscle: string, part: string): boolean {
-  const map: Record<string, RegExp[]> = {
-    胸: [/胸/, /前锯/],
-    背: [/背/, /斜方/, /竖脊/, /后束/],
-    腿: [/股四头/, /腘绳/, /臀/],
-    肩: [/束/, /肩/, /斜方/],
-    手臂: [/二头/, /三头/, /前臂/],
-    臀: [/臀/, /腘绳/],
-    核心: [/核心/, /腹直肌/, /下腹/],
-  };
-  const pats = map[part];
-  if (!pats) return false;
-  return pats.some((p) => p.test(muscle));
-}
-
-// ---------- 卡片组件 ----------
-function Card({
-  opt,
-  selected,
-  onClick,
-  cols = 3,
-  badge,
-}: {
-  opt: Opt;
-  selected: boolean;
-  onClick: () => void;
-  cols?: number;
-  badge?: number; // 点击顺序序号
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`relative flex flex-col items-center justify-center rounded-2xl border p-3.5 text-center transition-all active:scale-95 ${
-        selected
-          ? "border-emerald-500 bg-emerald-950/60 text-emerald-300"
-          : "border-zinc-800 bg-zinc-900/60 text-zinc-300 hover:border-zinc-600"
-      } ${cols >= 4 ? "min-h-[76px]" : "min-h-[96px]"}`}
-    >
-      <span className={cols >= 4 ? "text-lg" : "text-xl"}>{opt.emoji}</span>
-      <span className="mt-1 text-sm font-medium">{opt.label}</span>
-      {opt.sub && (
-        <span className={`mt-0.5 text-[10px] ${selected ? "text-emerald-500/80" : "text-zinc-500"}`}>{opt.sub}</span>
-      )}
-      {selected && (
-        <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[11px] font-bold text-zinc-950">
-          {badge ?? "✓"}
-        </span>
-      )}
-    </button>
-  );
-}
-
-function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <section className="mt-10 first:mt-6">
-      <h2 className="text-xl font-bold">{title}</h2>
-      {hint && <p className="mt-1 text-xs text-zinc-500">{hint}</p>}
-      <div className="mt-4">{children}</div>
-    </section>
-  );
-}
-
-// ---------- 主表单（单页长滚动，底部固定提交条） ----------
 export default function FitnessForm() {
   const [loading, setLoading] = useState(false);
   const [plan, setPlan] = useState<FitnessPlan | null>(null);
   const [restored, setRestored] = useState(false);
-
-  const [form, setForm] = useState<FitnessInput>({
-    targets: [],
-    parts: [],
-    places: [],
-    gymPoints: [],
-    weekdays: [],
-    daySlots: {},
-    equipment: [],
-    profile: { gender: "", age: "", height: "", weight: "", bodyFat: "", goalWeight: "", exp: "" },
-    userPicks: {},
-  });
+  const [form, setForm] = useState<FitnessInput>(INITIAL_FORM);
 
   // 进入页面时恢复已保存的计划
   useEffect(() => {
@@ -265,7 +53,8 @@ export default function FitnessForm() {
       .finally(() => setRestored(true));
   }, []);
 
-  function toggleArr(field: "targets" | "places" | "equipment", value: string) {
+  // 通用数组切换：目标 / 场地
+  function toggleArr(field: "targets" | "places", value: string) {
     const arr = form[field];
     setForm({ ...form, [field]: arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value] });
   }
@@ -282,7 +71,7 @@ export default function FitnessForm() {
   // 器械：取消勾选时清掉涉及该器械的所有自选动作
   function toggleEquipment(e: string) {
     const arr = form.equipment;
-    const willRemove = arr.includes(e); // 当前已勾 → 这次是移除
+    const willRemove = arr.includes(e);
     const next = willRemove ? arr.filter((v) => v !== e) : [...arr, e];
     const nextPicks: Record<string, string[]> = { ...(form.userPicks ?? {}) };
     if (willRemove) {
@@ -383,17 +172,7 @@ export default function FitnessForm() {
 
   function restart() {
     setPlan(null);
-    setForm({
-      targets: [],
-      parts: [],
-      places: [],
-      gymPoints: [],
-      weekdays: [],
-      daySlots: {},
-      equipment: [],
-      profile: { gender: "", age: "", height: "", weight: "", bodyFat: "", goalWeight: "", exp: "" },
-      userPicks: {},
-    });
+    setForm({ ...INITIAL_FORM, profile: { ...EMPTY_PROFILE } });
     window.scrollTo({ top: 0 });
   }
 
@@ -409,9 +188,6 @@ export default function FitnessForm() {
 
   if (plan) return <PlanView plan={plan} onRestart={restart} />;
   if (!restored) return null;
-
-  const inputCls =
-    "w-full rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2.5 text-center text-sm text-zinc-100 placeholder-zinc-600 focus:border-emerald-500 focus:outline-none";
 
   return (
     <div className="mx-auto max-w-lg px-5 pb-32 pt-5">
@@ -573,102 +349,9 @@ export default function FitnessForm() {
         )}
       </Section>
 
-      {/* 7 基本信息（无默认值，单位在标签） */}
+      {/* 8 基本信息（无默认值，单位在标签） */}
       <Section title="你的基本信息" hint="全空着，如实填 · 体脂率和目标体重不确定可不填">
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
-              <label className="mb-1.5 block text-xs text-zinc-500">性别</label>
-              <div className="grid grid-cols-2 gap-2">
-                {(["男", "女"] as const).map((g) => (
-                  <button
-                    key={g}
-                    onClick={() => setForm({ ...form, profile: { ...form.profile, gender: g } })}
-                    className={`rounded-xl border py-2.5 text-sm transition-colors ${
-                      form.profile.gender === g
-                        ? "border-emerald-500 bg-emerald-950/60 text-emerald-300"
-                        : "border-zinc-800 bg-zinc-900/60 text-zinc-300"
-                    }`}
-                  >
-                    {g}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs text-zinc-500">年龄（岁）</label>
-              <input
-                inputMode="numeric"
-                placeholder="如 23"
-                value={form.profile.age}
-                onChange={(e) => setForm({ ...form, profile: { ...form.profile, age: e.target.value } })}
-                className={inputCls}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
-              <label className="mb-1.5 block text-xs text-zinc-500">身高（cm）</label>
-              <input
-                inputMode="numeric"
-                placeholder="如 175"
-                value={form.profile.height}
-                onChange={(e) => setForm({ ...form, profile: { ...form.profile, height: e.target.value } })}
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs text-zinc-500">体重（kg）</label>
-              <input
-                inputMode="decimal"
-                placeholder="如 65"
-                value={form.profile.weight}
-                onChange={(e) => setForm({ ...form, profile: { ...form.profile, weight: e.target.value } })}
-                className={inputCls}
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
-              <label className="mb-1.5 block text-xs text-zinc-500">体脂率（%，选填）</label>
-              <input
-                inputMode="decimal"
-                placeholder="男生腹肌隐约可见≈15"
-                value={form.profile.bodyFat}
-                onChange={(e) => setForm({ ...form, profile: { ...form.profile, bodyFat: e.target.value } })}
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-xs text-zinc-500">目标体重（kg，选填）</label>
-              <input
-                inputMode="decimal"
-                placeholder="会算预计达标周数"
-                value={form.profile.goalWeight}
-                onChange={(e) => setForm({ ...form, profile: { ...form.profile, goalWeight: e.target.value } })}
-                className={inputCls}
-              />
-            </div>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs text-zinc-500">训练经验</label>
-            <div className="grid grid-cols-3 gap-2.5">
-              {(["新手（<半年）", "有些基础（半年-2年）", "老手（2年+）"] as const).map((e) => (
-                <button
-                  key={e}
-                  onClick={() => setForm({ ...form, profile: { ...form.profile, exp: e } })}
-                  className={`rounded-xl border px-1 py-2.5 text-xs leading-4 transition-colors ${
-                    form.profile.exp === e
-                      ? "border-emerald-500 bg-emerald-950/60 text-emerald-300"
-                      : "border-zinc-800 bg-zinc-900/60 text-zinc-300"
-                  }`}
-                >
-                  {e}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <ProfileSection profile={form.profile} onChange={(p) => setForm({ ...form, profile: p })} />
       </Section>
 
       {/* 底部固定提交条 */}
