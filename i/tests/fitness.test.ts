@@ -2,7 +2,7 @@
 // 运行：node --experimental-strip-types --test tests/fitness.test.ts
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { generateFitnessPlan, type FitnessInput } from "../src/lib/fitness.ts";
+import { generateFitnessPlan, listAllMoves, type FitnessInput } from "../src/lib/fitness.ts";
 
 // 以江洋真实数据为基准的输入
 function baseInput(overrides: Partial<FitnessInput> = {}): FitnessInput {
@@ -86,19 +86,23 @@ test("每个动作五要素齐全：起始重量 / 组次 / 休息 / 要点 / �
   }
 });
 
-test("每个训练日以平板支撑收尾（核心每天练）", () => {
+test("每个训练日以核心动作收尾（平板/悬垂/支撑等任一）", () => {
   const p = generateFitnessPlan(baseInput());
   p.schedule
     .filter((d) => d.exercises.length > 0)
-    .forEach((d) =>
-      assert.equal(d.exercises[d.exercises.length - 1].name, "平板支撑"),
-    );
+    .forEach((d) => {
+      const last = d.exercises[d.exercises.length - 1];
+      assert.ok(
+        /平板|悬垂|卷腹|支撑|挺身/.test(last.name),
+        `最后动作应是核心训练：实际 ${last.name}`,
+      );
+    });
 });
 
-test("起始重量合理：60kg 新手男的哑铃卧推在 5-12.5kg/只 区间", () => {
+test("起始重量合理：60kg 新手男的哑铃平板卧推在 5-12.5kg/只 区间", () => {
   const p = generateFitnessPlan(baseInput());
-  const bench = p.schedule[0].exercises.find((e) => e.name === "哑铃卧推");
-  assert.ok(bench, "胸日应含哑铃卧推");
+  const bench = p.schedule[0].exercises.find((e) => e.name === "哑铃平板卧推");
+  assert.ok(bench, "胸日应含哑铃平板卧推");
   const kg = parseFloat(bench.startWeight);
   assert.ok(kg >= 5 && kg <= 12.5, `实际 ${bench.startWeight}`);
   assert.ok(bench.startWeight.includes("/ 只"), "哑铃标注每只重量");
@@ -161,4 +165,102 @@ test("预估时长合理：训练日 40-90 分钟", () => {
     .forEach((d) => {
       assert.ok(d.minutes >= 40 && d.minutes <= 90, `${d.day} ${d.minutes}min`);
     });
+});
+
+test("v4 动作库：总数 ≥80，按热度排序", () => {
+  const all = listAllMoves();
+  assert.ok(all.length >= 80, `实际 ${all.length} 个动作`);
+  // 验证 popularity 字段都存在且按热度降序返回
+  for (let i = 1; i < all.length; i++) {
+    assert.ok(
+      all[i - 1].popularity >= all[i].popularity,
+      `${all[i - 1].name}(${all[i - 1].popularity}) 应在前 ${all[i].name}(${all[i].popularity})`,
+    );
+  }
+});
+
+test("v4 动作库：每个核心肌群覆盖 ≥10 个动作", () => {
+  const groups: Record<string, RegExp[]> = {
+    胸: [/胸/, /前锯/],
+    背: [/背/, /斜方/, /竖脊/, /后束/],
+    腿: [/股四头/, /腘绳/, /臀/],
+    肩: [/束/, /肩/, /斜方/],
+    手臂: [/二头/, /三头/, /前臂/],
+    核心: [/核心/, /腹直肌/, /下腹/],
+  };
+  const all = listAllMoves();
+  for (const [name, pats] of Object.entries(groups)) {
+    const count = all.filter((m) => pats.some((p) => p.test(m.muscle))).length;
+    assert.ok(count >= 10, `${name} 只有 ${count} 个动作`);
+  }
+});
+
+test("v4 动作库：所有复合动作起始重量含 kg 或自重标识", () => {
+  const p = generateFitnessPlan(
+    baseInput({
+      userPicks: {
+        胸: ["杠铃平板卧推", "哑铃平板卧推", "坐姿推胸", "双杠臂屈伸（胸）"],
+      },
+    }),
+  );
+  const mon = p.schedule[0];
+  for (const e of mon.exercises) {
+    const hasKg = e.startWeight.includes("kg");
+    const isSelf =
+      e.startWeight === "自重" ||
+      e.startWeight === "弹力带辅助起步" ||
+      e.startWeight.startsWith("自重") ||
+      e.startWeight.includes("弹力带");
+    assert.ok(hasKg || isSelf, `${e.name} 起始重量异常: ${e.startWeight}`);
+  }
+});
+
+test("userPicks 优先：用户勾选的动作按勾选顺序排入当日", () => {
+  const p = generateFitnessPlan(
+    baseInput({
+      userPicks: {
+        胸: ["杠铃平板卧推", "哑铃飞鸟", "双杠臂屈伸（胸）"],
+        背: ["杠铃划船", "高位下拉"],
+        腿: ["杠铃深蹲", "保加利亚分腿蹲", "哑铃直腿硬拉"],
+      },
+    }),
+  );
+  // 周一=胸日，3 个自选动作 + 核心收尾
+  const mon = p.schedule[0];
+  assert.equal(mon.type, "胸日");
+  assert.equal(mon.exercises[0].name, "杠铃平板卧推");
+  assert.equal(mon.exercises[1].name, "哑铃飞鸟");
+  assert.equal(mon.exercises[2].name, "双杠臂屈伸（胸）");
+  // 顶部变 "用户自定义"
+  assert.equal(p.overview.splitName, "用户自定义");
+  assert.equal(p.overview.customPicks, true);
+  // 周三=背日
+  const wed = p.schedule[2];
+  assert.equal(wed.exercises[0].name, "杠铃划船");
+  assert.equal(wed.exercises[1].name, "高位下拉");
+});
+
+test("userPicks 部分部位有自选 → 该部位用自选，其他部位用引擎兜底", () => {
+  const p = generateFitnessPlan(
+    baseInput({
+      userPicks: {
+        胸: ["杠铃平板卧推", "哑铃飞鸟"],
+      },
+    }),
+  );
+  // 周一胸日用自选
+  assert.equal(p.schedule[0].exercises[0].name, "杠铃平板卧推");
+  // 周三背日走兜底（不是自选）
+  assert.equal(p.schedule[2].type, "背日");
+  // 兜底也包含起始重量/组次/休息/要点
+  for (const e of p.schedule[2].exercises) {
+    assert.ok(e.startWeight && e.startWeight !== "NaNkg");
+  }
+});
+
+test("userPicks 为空/完全没传 → 走引擎兜底（与 v3 行为兼容）", () => {
+  const a = generateFitnessPlan(baseInput());
+  const b = generateFitnessPlan(baseInput({ userPicks: undefined }));
+  assert.equal(a.overview.splitName, b.overview.splitName);
+  assert.equal(a.schedule[0].exercises.length, b.schedule[0].exercises.length);
 });

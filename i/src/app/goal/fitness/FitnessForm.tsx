@@ -1,8 +1,9 @@
 "use client";
 import Link from "next/link";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FitnessInput, FitnessPlan } from "@/lib/fitness";
+import { movesByEquipment } from "@/lib/fitness";
 import PlanView from "./PlanView";
 
 // ---------- 选项定义 ----------
@@ -64,6 +65,127 @@ const EQUIPMENT: Opt[] = [
   { value: "单双杠", label: "单双杠", sub: "引体 · 臂屈伸", emoji: "🤸" },
   { value: "徒手", label: "徒手", sub: "零器械", emoji: "🧍" },
 ];
+
+// ---------- 自选动作三级选择 ----------
+function UserPicksPicker({
+  form,
+  togglePick,
+}: {
+  form: FitnessInput;
+  togglePick: (part: string, name: string) => void;
+}) {
+  const lib = movesByEquipment();
+
+  // 1. 已选部位 → 这些部位涵盖的动作（按器械分组）
+  const data = useMemo(() => {
+    const partMoves: Record<string, Record<string, { name: string; popularity: number; difficulty: string }[]>> = {};
+    const parts = form.parts;
+    for (const part of parts) {
+      partMoves[part] = {};
+      for (const eq of form.equipment) {
+        const moves = (lib[eq] ?? []).filter((m) => muscleMatchesPart(m.muscle, part));
+        if (moves.length === 0) continue;
+        partMoves[part][eq] = moves
+          .map((m) => ({ name: m.name, popularity: m.popularity, difficulty: m.difficulty }))
+          .sort((a, b) => b.popularity - a.popularity);
+      }
+    }
+    return partMoves;
+  }, [form.parts, form.equipment, lib]);
+
+  const totalPicked = Object.values(form.userPicks ?? {}).reduce((s, arr) => s + arr.length, 0);
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between rounded-xl bg-zinc-900/60 px-4 py-2.5 text-xs text-zinc-400">
+        <span>已选部位 · {form.parts.length} 个</span>
+        <span className={totalPicked > 0 ? "text-emerald-400" : ""}>
+          已勾动作 · {totalPicked} 个
+          {totalPicked > 0 && " · 按你勾选顺序训练"}
+        </span>
+      </div>
+      {form.parts.map((part) => {
+        const eqMap = data[part] ?? {};
+        const eqs = Object.keys(eqMap);
+        if (eqs.length === 0) {
+          return (
+            <div key={part} className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-3 text-xs text-zinc-500">
+              「{part}」在当前器械下没有可用动作。勾上对应的器械后再来挑。
+            </div>
+          );
+        }
+        return (
+          <details key={part} open className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
+            <summary className="flex cursor-pointer items-center justify-between px-4 py-3 text-sm font-medium text-zinc-200">
+              <span>
+                🫁 {part} <span className="text-xs text-zinc-500">· {eqs.length} 种器械</span>
+              </span>
+              <span className="text-xs text-zinc-500">{(form.userPicks?.[part] ?? []).length} 已选</span>
+            </summary>
+            <div className="space-y-4 px-4 pb-4">
+              {eqs.map((eq) => (
+                <div key={eq}>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-xs font-medium text-zinc-300">{eq}</p>
+                    <p className="text-[10px] text-zinc-600">按热度排序 🔥</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {eqMap[eq].map((m) => {
+                      const picked = (form.userPicks?.[part] ?? []).includes(m.name);
+                      const idx = (form.userPicks?.[part] ?? []).indexOf(m.name);
+                      return (
+                        <button
+                          key={m.name}
+                          onClick={() => togglePick(part, m.name)}
+                          className={`flex items-center justify-between rounded-lg border px-2.5 py-2 text-left transition-all active:scale-95 ${
+                            picked
+                              ? "border-emerald-500 bg-emerald-950/40 text-emerald-200"
+                              : "border-zinc-800 bg-zinc-950/40 text-zinc-400"
+                          }`}
+                        >
+                          <span className="flex-1 text-xs leading-tight">{m.name}</span>
+                          <span className="ml-2 flex shrink-0 items-center gap-1 text-[9px]">
+                            <span className={m.popularity >= 9 ? "text-orange-400" : "text-zinc-600"}>
+                              {m.popularity >= 9 ? "🔥" : m.popularity >= 7 ? "★" : ""}
+                            </span>
+                            {picked && (
+                              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-zinc-950">
+                                {idx + 1}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </details>
+        );
+      })}
+      <p className="text-center text-[10px] text-zinc-600">
+        提示：🔥 = 热门首选 · ★ = 主流高效 · 数字 = 你的勾选顺序
+      </p>
+    </div>
+  );
+}
+
+// 部位 → 该动作是否归属此部位（与引擎 PART_MUSCLES + 测试规则对齐）
+function muscleMatchesPart(muscle: string, part: string): boolean {
+  const map: Record<string, RegExp[]> = {
+    胸: [/胸/, /前锯/],
+    背: [/背/, /斜方/, /竖脊/, /后束/],
+    腿: [/股四头/, /腘绳/, /臀/],
+    肩: [/束/, /肩/, /斜方/],
+    手臂: [/二头/, /三头/, /前臂/],
+    臀: [/臀/, /腘绳/],
+    核心: [/核心/, /腹直肌/, /下腹/],
+  };
+  const pats = map[part];
+  if (!pats) return false;
+  return pats.some((p) => p.test(muscle));
+}
 
 // ---------- 卡片组件 ----------
 function Card({
@@ -127,6 +249,7 @@ export default function FitnessForm() {
     daySlots: {},
     equipment: [],
     profile: { gender: "", age: "", height: "", weight: "", bodyFat: "", goalWeight: "", exp: "" },
+    userPicks: {},
   });
 
   // 进入页面时恢复已保存的计划
@@ -147,11 +270,39 @@ export default function FitnessForm() {
     setForm({ ...form, [field]: arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value] });
   }
 
-  // 部位：点击顺序即训练顺序
+  // 部位：点击顺序即训练顺序。取消勾选时同步清掉 userPicks 中该部位的自选动作
   function togglePart(p: string) {
+    const willRemove = form.parts.includes(p);
+    const next = willRemove ? form.parts.filter((v) => v !== p) : [...form.parts, p];
+    const nextPicks = { ...(form.userPicks ?? {}) };
+    if (willRemove) delete nextPicks[p];
+    setForm({ ...form, parts: next, userPicks: nextPicks });
+  }
+
+  // 器械：取消勾选时清掉涉及该器械的所有自选动作
+  function toggleEquipment(e: string) {
+    const arr = form.equipment;
+    const willRemove = arr.includes(e); // 当前已勾 → 这次是移除
+    const next = willRemove ? arr.filter((v) => v !== e) : [...arr, e];
+    const nextPicks: Record<string, string[]> = { ...(form.userPicks ?? {}) };
+    if (willRemove) {
+      const lib = movesByEquipment();
+      const removedNames = new Set((lib[e] ?? []).map((m) => m.name));
+      for (const [part, names] of Object.entries(nextPicks)) {
+        nextPicks[part] = names.filter((n) => !removedNames.has(n));
+        if (nextPicks[part].length === 0) delete nextPicks[part];
+      }
+    }
+    setForm({ ...form, equipment: next, userPicks: nextPicks });
+  }
+
+  // userPicks 切换：part + 动作名。保持点击顺序
+  function togglePick(part: string, name: string) {
+    const cur = form.userPicks?.[part] ?? [];
+    const next = cur.includes(name) ? cur.filter((n) => n !== name) : [...cur, name];
     setForm({
       ...form,
-      parts: form.parts.includes(p) ? form.parts.filter((v) => v !== p) : [...form.parts, p],
+      userPicks: { ...(form.userPicks ?? {}), [part]: next },
     });
   }
 
@@ -241,6 +392,7 @@ export default function FitnessForm() {
       daySlots: {},
       equipment: [],
       profile: { gender: "", age: "", height: "", weight: "", bodyFat: "", goalWeight: "", exp: "" },
+      userPicks: {},
     });
     window.scrollTo({ top: 0 });
   }
@@ -397,10 +549,28 @@ export default function FitnessForm() {
               opt={o}
               cols={4}
               selected={form.equipment.includes(o.value)}
-              onClick={() => toggleArr("equipment", o.value)}
+              onClick={() => toggleEquipment(o.value)}
             />
           ))}
         </div>
+      </Section>
+
+      {/* 7 自选动作（可选）—— 部位 → 器械 → 动作三级 */}
+      <Section
+        title="想自己挑动作？（可选）"
+        hint="不选就用上面的器械自动推荐；选了优先按你的勾选顺序编排。动作按热度排序，越靠前越主流高效。"
+      >
+        {form.parts.length === 0 ? (
+          <p className="rounded-xl border border-amber-900/60 bg-amber-950/30 px-4 py-3 text-xs text-amber-300">
+            ⚠️ 先在上面「想练哪些部位？」勾选要练的部位，才能展开动作选择。
+          </p>
+        ) : form.equipment.length === 0 ? (
+          <p className="rounded-xl border border-amber-900/60 bg-amber-950/30 px-4 py-3 text-xs text-amber-300">
+            ⚠️ 先在上面「能用什么器械？」勾选器械，才能看到可用的动作。
+          </p>
+        ) : (
+          <UserPicksPicker form={form} togglePick={togglePick} />
+        )}
       </Section>
 
       {/* 7 基本信息（无默认值，单位在标签） */}
