@@ -5,7 +5,6 @@ export type Opt = {
   label: string;
   sub?: string;
   emoji: string;
-  image?: string; // 器械照片路径（可选）
 };
 
 export const TARGETS: Opt[] = [
@@ -54,16 +53,16 @@ export const SLOT_SUB: Record<string, string> = {
   暂定: "还没定",
 };
 
-// 器械选项 + 实拍图（路径相对 public/）
+// 器械选项（无图片，纯 emoji + 文字）
 export const EQUIPMENT: Opt[] = [
-  { value: "杠铃", label: "杠铃", sub: "深蹲架 · 卧推架", emoji: "🏋️", image: "/equipment/barbell.jpg" },
-  { value: "哑铃", label: "哑铃", sub: "家里也能用", emoji: "🥇", image: "/equipment/dumbbell.jpg" },
-  { value: "龙门架", label: "龙门架", sub: "绳索 · 夹胸下压", emoji: "🔗", image: "/equipment/cable.jpg" },
-  { value: "史密斯机", label: "史密斯机", sub: "固定轨迹", emoji: "⚙️", image: "/equipment/smith.webp" },
-  { value: "坐姿器械", label: "坐姿器械", sub: "推胸下拉腿举", emoji: "🔧", image: "/equipment/machine.jpg" },
-  { value: "弹力带", label: "弹力带", sub: "在家神器", emoji: "🎗️", image: "/equipment/band.jpg" },
-  { value: "单双杠", label: "单双杠", sub: "引体 · 臂屈伸", emoji: "🤸", image: "/equipment/pullup.jpg" },
-  { value: "徒手", label: "徒手", sub: "零器械", emoji: "🧍", image: "/equipment/bodyweight.jpg" },
+  { value: "杠铃", label: "杠铃", sub: "深蹲架 · 卧推架", emoji: "🏋️" },
+  { value: "哑铃", label: "哑铃", sub: "家里也能用", emoji: "🥇" },
+  { value: "龙门架", label: "龙门架", sub: "绳索 · 夹胸下压", emoji: "🔗" },
+  { value: "史密斯机", label: "史密斯机", sub: "固定轨迹", emoji: "⚙️" },
+  { value: "坐姿器械", label: "坐姿器械", sub: "推胸下拉腿举", emoji: "🔧" },
+  { value: "弹力带", label: "弹力带", sub: "在家神器", emoji: "🎗️" },
+  { value: "单双杠", label: "单双杠", sub: "引体 · 臂屈伸", emoji: "🤸" },
+  { value: "徒手", label: "徒手", sub: "零器械", emoji: "🧍" },
 ];
 
 export const EXP_OPTIONS = ["新手（<半年）", "有些基础（半年-2年）", "老手（2年+）"] as const;

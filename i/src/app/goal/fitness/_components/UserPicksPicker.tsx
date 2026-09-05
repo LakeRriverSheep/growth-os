@@ -1,8 +1,7 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { movesByEquipment } from "@/lib/fitness";
 import type { FitnessInput } from "@/lib/fitness";
-import { getMoveImage } from "./moveImages";
 
 // 部位 → 该动作是否归属此部位（与引擎 PART_MUSCLES + 测试规则对齐）
 function muscleMatchesPart(muscle: string, part: string): boolean {
@@ -131,8 +130,6 @@ function EquipmentGroup({
   picked: string[];
   onToggle: (name: string) => void;
 }) {
-  const [preview, setPreview] = useState<string | null>(null);
-
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
@@ -143,76 +140,29 @@ function EquipmentGroup({
         {moves.map((m) => {
           const isPicked = picked.includes(m.name);
           const idx = picked.indexOf(m.name);
-          const img = getMoveImage(m.name);
           return (
-            <div
+            <button
               key={m.name}
-              className={`group relative flex items-center gap-2 rounded-lg border px-2 py-1.5 transition-all ${
+              onClick={() => onToggle(m.name)}
+              className={`flex items-center justify-between rounded-lg border px-2.5 py-2 text-left transition-all active:scale-95 ${
                 isPicked
                   ? "border-emerald-500 bg-emerald-950/40 text-emerald-200"
                   : "border-zinc-800 bg-zinc-950/40 text-zinc-400"
               }`}
             >
-              {/* 缩略图（点击展开大图） */}
-              {img ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPreview(preview === m.name ? null : m.name);
-                  }}
-                  className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md bg-zinc-800 transition-transform hover:scale-110"
-                  title="点击查看大图"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={img} alt={m.name} className="h-full w-full object-cover" loading="lazy" />
-                </button>
-              ) : (
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-zinc-800/60 text-[10px] text-zinc-600">
-                  {eq.slice(0, 2)}
-                </span>
-              )}
-
-              {/* 动作名 + 勾选 */}
-              <button
-                type="button"
-                onClick={() => onToggle(m.name)}
-                className="flex min-w-0 flex-1 items-center justify-between gap-1 text-left active:scale-95"
-              >
-                <span className="flex-1 truncate text-xs leading-tight">{m.name}</span>
-                <span className="flex shrink-0 items-center gap-1 text-[9px]">
-                  <HotBadge popularity={m.popularity} />
-                  {isPicked && (
-                    <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-zinc-950">
-                      {idx + 1}
-                    </span>
-                  )}
-                </span>
-              </button>
-            </div>
+              <span className="flex-1 text-xs leading-tight">{m.name}</span>
+              <span className="ml-2 flex shrink-0 items-center gap-1 text-[9px]">
+                <HotBadge popularity={m.popularity} />
+                {isPicked && (
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-zinc-950">
+                    {idx + 1}
+                  </span>
+                )}
+              </span>
+            </button>
           );
         })}
       </div>
-
-      {/* 大图预览浮层 */}
-      {preview && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 p-6"
-          onClick={() => setPreview(null)}
-        >
-          <div className="relative max-w-sm">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={getMoveImage(preview)}
-              alt={preview}
-              className="w-full rounded-2xl"
-              onClick={(e) => e.stopPropagation()}
-            />
-            <p className="mt-3 text-center text-sm font-medium text-zinc-200">{preview}</p>
-            <p className="mt-1 text-center text-xs text-zinc-500">点击任意处关闭 · 图源 wger.de</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
