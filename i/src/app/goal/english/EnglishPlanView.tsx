@@ -110,10 +110,10 @@ export default function EnglishPlanView({ plan, onRestart }: { plan: EnglishPlan
           重新填写
         </button>
         <Link
-          href="/records"
-          className="flex-1 rounded-full bg-emerald-600 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-emerald-500"
+          href="/"
+          className="flex-1 rounded-full border border-zinc-700 py-2.5 text-center text-sm text-zinc-400 transition-colors hover:border-zinc-500 hover:text-zinc-200"
         >
-          去每日记录打卡 →
+          回到首页
         </Link>
       </div>
     </div>

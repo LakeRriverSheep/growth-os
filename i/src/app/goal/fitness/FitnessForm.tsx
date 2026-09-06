@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { FitnessInput, FitnessPlan } from "@/lib/fitness";
 import { movesByEquipment } from "@/lib/fitness";
 import PlanView from "./PlanView";
+import PlanSummary from "./PlanSummary";
 import Card from "./_components/Card";
 import Section from "./_components/Section";
 import UserPicksPicker from "./_components/UserPicksPicker";
@@ -39,15 +40,38 @@ export default function FitnessForm() {
   const [plan, setPlan] = useState<FitnessPlan | null>(null);
   const [restored, setRestored] = useState(false);
   const [form, setForm] = useState<FitnessInput>(INITIAL_FORM);
+  // 保存的计划更新时间，用于摘要卡片显示
+  const [planUpdatedAt, setPlanUpdatedAt] = useState<string | undefined>(undefined);
+  // 板块状态：「home」= 摘要+表单折叠 / 「full」= 完整 PlanView / 「edit」= 摘要+表单展开
+  const [viewMode, setViewMode] = useState<"home" | "full" | "edit">("home");
+  const [editExpanded, setEditExpanded] = useState(false);
 
   // 进入页面时恢复已保存的计划
   useEffect(() => {
     fetch("/api/plan?goalId=fitness")
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data && data.source === "fitness-calc" && data.plan && !Array.isArray(data.plan)) {
-          setPlan(data.plan as FitnessPlan);
+      .then(async (data) => {
+        if (!data || data.source !== "fitness-calc" || !data.plan || Array.isArray(data.plan)) return;
+        const p = data.plan as FitnessPlan;
+        // 检测旧版缓存（缺新字段如 stairClimber）→ 用保存的 answers 自动 regen
+        const isOldPlan = !p.meals?.stairClimber;
+        if (isOldPlan && data.answers) {
+          try {
+            const res = await fetch("/api/plan", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ goalId: "fitness", answers: data.answers }),
+            });
+            const fresh = await res.json();
+            if (fresh?.plan) {
+              setPlan(fresh.plan as FitnessPlan);
+              setPlanUpdatedAt(new Date().toISOString());
+              return;
+            }
+          } catch {}
         }
+        setPlan(p);
+        setPlanUpdatedAt(data.updatedAt);
       })
       .catch(() => {})
       .finally(() => setRestored(true));
@@ -161,6 +185,9 @@ export default function FitnessForm() {
       const data = await res.json();
       if (data?.plan) {
         setPlan(data.plan as FitnessPlan);
+        setPlanUpdatedAt(new Date().toISOString());
+        setViewMode("home");
+        setEditExpanded(false);
         window.scrollTo({ top: 0 });
       }
     } catch {
@@ -170,10 +197,38 @@ export default function FitnessForm() {
     }
   }
 
-  function restart() {
-    setPlan(null);
+  // 在已有计划时重置表单（让用户重新填）
+  function prepareEdit() {
     setForm({ ...INITIAL_FORM, profile: { ...EMPTY_PROFILE } });
+    setViewMode("home");
+    setEditExpanded(true);
     window.scrollTo({ top: 0 });
+  }
+
+  // 从 PlanView 整页返回到首页摘要
+  function backToHome() {
+    setViewMode("home");
+    window.scrollTo({ top: 0 });
+  }
+
+  // 把当前 state 和 handlers 传给 FormBody
+  function renderForm() {
+    return (
+      <FormBody
+        form={form}
+        setForm={setForm}
+        toggleArr={toggleArr}
+        togglePart={togglePart}
+        toggleEquipment={toggleEquipment}
+        togglePick={togglePick}
+        togglePoint={togglePoint}
+        setPointDistance={setPointDistance}
+        toggleDay={toggleDay}
+        setDaySlot={setDaySlot}
+        canSubmit={canSubmit()}
+        submit={submit}
+      />
+    );
   }
 
   if (loading) {
@@ -186,17 +241,105 @@ export default function FitnessForm() {
     );
   }
 
-  if (plan) return <PlanView plan={plan} onRestart={restart} />;
   if (!restored) return null;
 
+  // 完整 PlanView 模式 —— 用户点了「查看完整计划」按钮
+  if (viewMode === "full" && plan) {
+    return <PlanView plan={plan} onRestart={backToHome} />;
+  }
+
+  // 主页面：两个板块 ——「我的计划」+「制定新计划」
   return (
     <div className="mx-auto max-w-lg px-5 pb-32 pt-5">
       <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
         ← 返回
       </Link>
-      <h1 className="mt-3 text-2xl font-bold">💪 定制你的健身计划</h1>
-      <p className="mt-1 text-xs text-zinc-500">从上往下填完，底部一键生成 · 越诚实，计划越能执行</p>
+      <h1 className="mt-3 text-2xl font-bold">💪 健身计划</h1>
+      <p className="mt-1 text-xs text-zinc-500">上面看你的计划 · 下面调整或新建</p>
 
+      {/* 板块 1：我的计划（有计划时显示摘要，无计划时引导去填表） */}
+      {plan ? (
+        <div className="mt-5">
+          <PlanSummary
+            plan={plan}
+            updatedAt={planUpdatedAt}
+            onViewFull={() => setViewMode("full")}
+            onEdit={prepareEdit}
+          />
+        </div>
+      ) : (
+        <div className="mt-5 rounded-2xl border border-amber-800/40 bg-amber-950/15 p-4">
+          <p className="text-sm font-semibold text-amber-300">📋 你还没有训练计划</p>
+          <p className="mt-1.5 text-[11px] leading-5 text-amber-200/80">
+            填完下面的表单（一分钟左右），会自动生成：5 分化训练 / 你今天的动作清单 / 时间线餐次 / 爬楼机推荐。
+          </p>
+        </div>
+      )}
+
+      {/* 板块 2：制定新计划 / 调整 */}
+      <div className="mt-6">
+        {plan ? (
+          // 已有计划 → 默认折叠表单
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
+            <button
+              onClick={() => setEditExpanded(!editExpanded)}
+              className="flex w-full items-center justify-between px-4 py-3 text-left"
+            >
+              <span className="text-sm font-semibold text-zinc-200">
+                {editExpanded ? "▲ 收起表单" : "▼ 调整 / 重新制定"}
+              </span>
+              <span className="text-[10px] text-zinc-500">
+                {editExpanded ? "" : "点开重新填"}
+              </span>
+            </button>
+            {editExpanded && (
+              <div className="border-t border-zinc-800 px-4 pb-6 pt-4">
+                <div className="mb-4 rounded-xl border border-amber-800/40 bg-amber-950/15 p-3 text-[11px] leading-5 text-amber-200/90">
+                  ⚠️ 重新提交会覆盖现有计划。是否要先「📖 查看完整计划」备份动作/重量？
+                </div>
+                {renderForm()}
+              </div>
+            )}
+          </div>
+        ) : (
+          // 无计划 → 直接显示表单
+          <div>{renderForm()}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 抽出的表单渲染（避免上面 return 里嵌套大段 JSX）
+function FormBody({
+  form,
+  setForm,
+  toggleArr,
+  togglePart,
+  toggleEquipment,
+  togglePick,
+  togglePoint,
+  setPointDistance,
+  toggleDay,
+  setDaySlot,
+  canSubmit,
+  submit,
+}: {
+  form: FitnessInput;
+  setForm: (f: FitnessInput) => void;
+  toggleArr: (field: "targets" | "places", value: string) => void;
+  togglePart: (p: string) => void;
+  toggleEquipment: (e: string) => void;
+  togglePick: (part: string, name: string) => void;
+  togglePoint: (p: string) => void;
+  setPointDistance: (p: string, distance: string) => void;
+  toggleDay: (day: string) => void;
+  setDaySlot: (day: string, slot: string) => void;
+  canSubmit: boolean;
+  submit: () => void;
+}) {
+  return (
+    <div className="pb-32 pt-1">
       {/* 1 训练目标 */}
       <Section title="你想达成什么？" hint="可多选 · 减脂+增肌会走「身体重组」路线">
         <div className="grid grid-cols-3 gap-3">
@@ -331,7 +474,7 @@ export default function FitnessForm() {
         </div>
       </Section>
 
-      {/* 7 自选动作（可选）—— 部位 → 器械 → 动作三级 */}
+      {/* 7 自选动作 */}
       <Section
         title="想自己挑动作？（可选）"
         hint="不选就用上面的器械自动推荐；选了优先按你的勾选顺序编排。动作按热度排序，越靠前越主流高效。"
@@ -349,7 +492,7 @@ export default function FitnessForm() {
         )}
       </Section>
 
-      {/* 8 基本信息（无默认值，单位在标签） */}
+      {/* 8 基本信息 */}
       <Section title="你的基本信息" hint="全空着，如实填 · 体脂率和目标体重不确定可不填">
         <ProfileSection profile={form.profile} onChange={(p) => setForm({ ...form, profile: p })} />
       </Section>
@@ -359,12 +502,12 @@ export default function FitnessForm() {
         <div className="mx-auto max-w-lg">
           <button
             onClick={submit}
-            disabled={!canSubmit()}
+            disabled={!canSubmit}
             className="w-full rounded-full bg-emerald-600 py-3.5 text-sm font-medium text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-30"
           >
             🔥 生成我的吃练计划
           </button>
-          {!canSubmit() && (
+          {!canSubmit && (
             <p className="mt-2 text-center text-[10px] text-zinc-600">
               填完目标 / 场地 / 出发点距离 / 练哪几天 / 器械 / 基本信息后即可生成
             </p>

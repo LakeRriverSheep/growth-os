@@ -37,6 +37,7 @@ export type DayPlan = {
   slot: string;
   minutes: number;
   exercises: Exercise[];
+  warmup: string[]; // 该日热身文案（周一胸日专属与其他日不同）
 };
 export type MealPlan = {
   preWorkout: { when: string; items: string[] };
@@ -45,6 +46,13 @@ export type MealPlan = {
   shopping: { item: string; amount: string; note: string }[];
   channels: { name: string; why: string }[];
   gear: { item: string; price: string; why: string }[];
+  stairClimber: {
+    durationMin: number;
+    level: string;
+    hrZone: string;
+    cues: string[];
+    slot: string; // 推荐时段
+  };
 };
 export type FitnessPlan = {
   overview: {
@@ -334,7 +342,7 @@ function startWeight(name: string, kg: number, gender: string, exp: string): str
       /深蹲$/.test(name) || /弓步蹲$/.test(name) || name.includes("臀桥") ||
       /划船$/.test(name) || name.includes("卷腹") ||
       name.includes("登山") || name.includes("挺身") || name.includes("跪姿") ||
-      name.includes("弹力带") || name.includes("臂屈伸")) {
+      name.includes("弹力带") || name.includes("臂屈伸") || name.includes("健腹轮")) {
     if (name.includes("引体")) return "弹力带辅助起步";
     if (name.includes("弹力带")) return "弹力带阻力（按颜色定强度）";
     if (name.includes("臂屈伸")) return "自重（必要时挂杠铃片加重）";
@@ -369,11 +377,66 @@ function isCoreMove(name: string): boolean {
 }
 
 function setCount(ex: Exercise): number {
-  return parseInt(ex.setsReps) || 3;
+  // setsReps 形如 "4 × 8-12" / "2 × 力竭激活 + 4 × 12-16"，累加所有 × 前的组数
+  let total = 0;
+  for (const m of ex.setsReps.matchAll(/(\d+)\s*[×x]/g)) total += parseInt(m[1], 10);
+  return total || 3;
 }
 
 // ---------- 部位日模板（兜底推荐用） ----------
 type DayType = { name: string; mix: { 蹲: number; 推: number; 拉: number; 髋: number } };
+
+// 周一·胸日·专属流程（用户原话整理：热身+激活 → 正式组从上到下）
+// 保留你原话的全部动作细节，未删减
+const MONDAY_CHEST: {
+  warmup: string[];
+  exercises: Pick<Exercise, "name" | "muscle" | "cue">[];
+} = {
+  warmup: [
+    "泡沫轴热身·①：胸部正上方一点，用力压住，吸气维持，扩张胸部，激活胸廓感受，放松胸肌颈膜，减少肩膀压力",
+    "泡沫轴热身·②：手抵住泡沫轴，菱形肌拉伸的感觉，前锯肌也会发力",
+    "激活组原则：激活不需要大重量，而是感受最强的重量，做到力竭，做到酸痛感，锁骨下面的上胸肌纤维发力的感觉，2 组",
+  ],
+  exercises: [
+    {
+      name: "上斜固定夹胸器 / 仰卧龙门架夹胸（上胸激活）",
+      muscle: "上胸",
+      cue:
+        "手要握的偏上一点，肋骨贴紧凳子，要很精准的找到它，就是上面，4 组正式组 × 12-16（先用激活组找到锁骨下上胸肌纤维发力的感觉）",
+    },
+    {
+      name: "上斜哑铃卧推",
+      muscle: "上胸 · 前束",
+      cue:
+        "肋骨紧紧贴住凳子，收住肋骨，腰紧紧地贴住凳子，不要吸太多气，上去的时候手腕往里扣，不用推到中间，反正会松，往下放的多，大概快直了就结束，全握，引导胸大肌上束发力，要把力收到胸肌上，向下的时候不要单纯的向下，反正力会到肩部，向外一点，向远端延长，胸肌拉伸感，不要抬头，4 组正式组 × 12-16",
+    },
+    {
+      name: "下斜双杠臂屈伸（下胸）",
+      muscle: "下胸 · 三头",
+      cue:
+        "自重、辅助都行，首先撑住，把身体含起来，然后下去，不是放腿下去，而是开肘，要感觉到下胸收的很紧，不要弯腰，而是肩胛骨，中缝没有肉，因为收缩不够，募集更多的肌纤维，可以用手扣一扣中缝，4 组 × 12-16（先轻重量，感受发力，再加重量）",
+    },
+    {
+      name: "平夹（Pec Deck / 龙门架中位夹胸）",
+      muscle: "中胸（中缝）",
+      cue:
+        "练整体，深吸一口气，不要顶肋，平角度，往后放，不要开肋顶腰，向内收要收紧，肘伸直，中缝发力更好，可以单手去做，感受到挤压的感觉",
+    },
+  ],
+};
+
+// 通用热身（各训练日默认；周一胸日专属热身见 MONDAY_CHEST.warmup）
+const GENERIC_WARMUP: string[] = [
+  "5 分钟提升心率：快走 / 划船机 / 开合跳（微喘但不累）",
+  "当天要练的关节动态活动：肩绕环、髋绕环、徒手深蹲各 10 次",
+  "第一个动作做 2 组递增组：空杆 × 12 → 50% 重量 × 8，然后进正式组",
+];
+
+// 某天 / 部位 是否触发「周一胸日专属流程」
+function isMondayChestDay(day: string, dayType: string): boolean {
+  // 周一 + 任意包含"胸"的部位日类型
+  return day === "周一" && dayType.includes("胸");
+}
 
 const PART_TPL: Record<string, DayType> = {
   胸: { name: "胸日", mix: { 蹲: 0, 推: 3, 拉: 1, 髋: 0 } },
@@ -541,6 +604,27 @@ function mealPlan(f: FitnessInput, macros: ReturnType<typeof nutrition>): MealPl
       { item: "砧板 + 菜刀", price: "¥50", why: "生熟分开买两块" },
       { item: "摇摇杯", price: "¥20", why: "蛋白粉/牛奶随冲随喝" },
     ],
+    stairClimber: stairClimberPlan(f),
+  };
+}
+
+function stairClimberPlan(f: FitnessInput) {
+  const age = parseFloat(f.profile.age) || 22;
+  const hrMax = 220 - age;
+  const lo = Math.round(hrMax * 0.6);
+  const hi = Math.round(hrMax * 0.7);
+  return {
+    durationMin: 30,
+    level: "5-7",
+    hrZone: `${lo}-${hi} bpm`,
+    slot: "下午加餐后 / 晚餐前（16:30 左右）",
+    cues: [
+      "目标心率区间 = (220 − 年龄) × 60-70%，保持鼻呼吸能讲短句的强度",
+      "不握扶手：多消耗 ~10% 热量 + 额外练到臀腿核心",
+      "阻力等级 5-7（健身房机器一般 1-20 标尺），太高会改用大腿前侧发力",
+      "前 5 分钟当热身、最后 5 分钟降速收尾，中间 20 分钟维持强度",
+      "只爬不跑：步频稳定，每一步踩实，禁止跳跃借力",
+    ],
   };
 }
 
@@ -582,10 +666,14 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
   const { types, custom: autoCustom } = dayTypes(f.weekdays.length, f.parts);
   const customPicks = !!f.userPicks && Object.keys(f.userPicks).some((p) => (f.userPicks?.[p] ?? []).length > 0);
 
+  // ---------- 集合：周一胸日专属（多天情况下只在周一触发一次） ----------
+  // 真正约束在 isMondayChestDay（周一 + 当日类型含"胸"）；此开关只是确认周一在训练日里
+  const mondayChestActive = f.weekdays.includes("周一");
+
   const schedule: DayPlan[] = ALL_DAYS.map((d) => {
     const idx = f.weekdays.indexOf(d);
     if (idx === -1) {
-      return { day: d, type: "休息", place: "—", slot: "—", minutes: 0, exercises: [] };
+      return { day: d, type: "休息", place: "—", slot: "—", minutes: 0, exercises: [], warmup: [] };
     }
     const t = types[idx % types.length];
 
@@ -608,11 +696,22 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
     }
     const slot = f.daySlots?.[d] ?? "暂定";
 
-    // 动作选择：优先 userPicks > 自动按 mix 排
+    // 动作选择：优先 userPicks > 周一胸日专属（仅当周一胸日且没自选）> 自动按 mix 排
+    const mondaySpecial = isMondayChestDay(d, t.name) && mondayChestActive;
     let ex: Exercise[];
     const pickMoves = picksFor(f.userPicks, inferPartFromType(t.name));
     if (pickMoves.length > 0) {
       ex = toEx(pickMoves, exp, kg, gender);
+    } else if (mondaySpecial) {
+      // 周一胸日专属流程：你的原话整理
+      ex = MONDAY_CHEST.exercises.map((e, i) => ({
+        name: e.name,
+        muscle: e.muscle,
+        startWeight: startWeightByName(e.name, kg, gender, exp),
+        setsReps: i === 0 ? "2 × 力竭激活 + 4 × 12-16" : "4 × 12-16",
+        rest: "90 秒",
+        cue: e.cue,
+      }));
     } else {
       ex = [
         ...toEx(pick(moves, "蹲", t.mix["蹲"]), exp, kg, gender),
@@ -621,8 +720,8 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
         ...toEx(pick(moves, "髋", t.mix["髋"]), exp, kg, gender),
       ];
     }
-    // 核心收尾（userPicks 包含核心则不再追加）
-    if (!ex.some((e) => isCoreMove(e.name))) {
+    // 核心收尾（userPicks 包含核心则不再追加；周一胸日专属流已包含激活流程，不追加平板）
+    if (!ex.some((e) => isCoreMove(e.name)) && !mondaySpecial) {
       ex.push({
         name: "平板支撑",
         muscle: "核心",
@@ -634,12 +733,24 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
     }
 
     const minutes = 10 + ex.reduce((s, e) => s + setCount(e), 0) * 2.5;
+    const dayWarmup = mondaySpecial ? MONDAY_CHEST.warmup : GENERIC_WARMUP;
 
-    return { day: d, type: t.name, place, slot, minutes: Math.round(minutes / 5) * 5, exercises: ex };
+    return {
+      day: d,
+      type: t.name,
+      place,
+      slot,
+      minutes: Math.round(minutes / 5) * 5,
+      exercises: ex,
+      warmup: dayWarmup,
+    };
   });
 
   const gymDays = schedule.filter((d) => d.place === "健身房").length;
   const homeDays = schedule.filter((d) => d.place === "家里").length;
+
+  // 通用热身（兜底字段：旧版缓存的无按日 warmup 用；周一胸日专属热身已挂在 schedule 每一天上）
+  const warmup: string[] = GENERIC_WARMUP;
 
   const notes: string[] = [
     "渐进超负荷：同样的动作，每周比上周多重 2.5kg 或多做 1-2 次，记进记录页——这是进步的唯一证据。",
@@ -695,11 +806,7 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
     },
     macros,
     meals: mealPlan(f, macros),
-    warmup: [
-      "5 分钟提升心率：快走 / 划船机 / 开合跳（微喘但不累）",
-      "当天要练的关节动态活动：肩绕环、髋绕环、徒手深蹲各 10 次",
-      "第一个动作做 2 组递增组：空杆 × 12 → 50% 重量 × 8，然后进正式组",
-    ],
+    warmup,
     schedule,
     progression: [
       { week: "第 1 周", focus: "建立基线", how: "按表里「起始重量」开练，找到每个动作 8-12 次接近力竭的实际重量并记下来，别瞎冲。" },
@@ -708,6 +815,23 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
     ],
     notes,
   };
+}
+
+// 周一胸日专属动作的起重量计算（按动作名查 START_KG，其他按 Move 走不通）
+function startWeightByName(name: string, kg: number, gender: string, exp: string): string {
+  const coef = START_KG[name];
+  if (!coef) {
+    // 自重类（双杠臂屈伸、夹胸器坐姿）：按 RPE 给个起点提示
+    if (name.includes("双杠")) return "自重（必要时挂杠铃片加重）";
+    if (name.includes("夹胸")) return "看 RPE 7~8 起，先找到发力感";
+    return "按 RPE 8 估";
+  }
+  let w = kg * coef;
+  if (gender === "女") w *= 0.7;
+  if (exp.startsWith("新手")) w *= 0.7;
+  if (exp.startsWith("老手")) w *= 1.15;
+  const rounded = Math.max(2.5, Math.round(w / 2.5) * 2.5);
+  return `${rounded}kg`;
 }
 
 // 辅助：从日类型名推断部位关键词

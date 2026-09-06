@@ -23,6 +23,27 @@ const SCHEMA = `
     source TEXT DEFAULT 'template',
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
   );
+
+  -- 每个动作的打勾 + 重量/次数/组数（按日期 + 动作名 唯一）
+  CREATE TABLE IF NOT EXISTS exercise_logs (
+    date TEXT NOT NULL,
+    exercise_name TEXT NOT NULL,
+    checked INTEGER DEFAULT 0,
+    weight TEXT DEFAULT '',
+    reps TEXT DEFAULT '',
+    sets TEXT DEFAULT '',
+    updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+    PRIMARY KEY (date, exercise_name)
+  );
+
+  -- 时间线通用打勾项（热身 / 各餐每一条）：按日期 + item 唯一，刷新/换端不丢
+  CREATE TABLE IF NOT EXISTS check_items (
+    date TEXT NOT NULL,
+    item TEXT NOT NULL,
+    checked INTEGER DEFAULT 0,
+    updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+    PRIMARY KEY (date, item)
+  );
 `;
 
 type SqlValue = string | number | null;

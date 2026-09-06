@@ -86,10 +86,12 @@ test("每个动作五要素齐全：起始重量 / 组次 / 休息 / 要点 / �
   }
 });
 
-test("每个训练日以核心动作收尾（平板/悬垂/支撑等任一）", () => {
+test("每个训练日以核心动作收尾（周一胸日专属模板除外，另行断言）", () => {
   const p = generateFitnessPlan(baseInput());
+  const mondaySpecial = (d: { day: string; type: string; exercises: { name: string }[] }) =>
+    d.day === "周一" && d.type.includes("胸") && d.exercises[0]?.name.includes("上斜固定夹胸器");
   p.schedule
-    .filter((d) => d.exercises.length > 0)
+    .filter((d) => d.exercises.length > 0 && !mondaySpecial(d))
     .forEach((d) => {
       const last = d.exercises[d.exercises.length - 1];
       assert.ok(
@@ -99,13 +101,32 @@ test("每个训练日以核心动作收尾（平板/悬垂/支撑等任一）", 
     });
 });
 
-test("起始重量合理：60kg 新手男的哑铃平板卧推在 5-12.5kg/只 区间", () => {
+test("周一胸日：无自选时启用专属 4 动作模板 + 专属热身", () => {
   const p = generateFitnessPlan(baseInput());
-  const bench = p.schedule[0].exercises.find((e) => e.name === "哑铃平板卧推");
+  const mon = p.schedule[0];
+  assert.equal(mon.day, "周一");
+  assert.equal(mon.type, "胸日");
+  assert.equal(mon.exercises.length, 4);
+  assert.ok(mon.exercises[0].name.includes("上斜固定夹胸器"), mon.exercises[0].name);
+  assert.ok(mon.exercises[mon.exercises.length - 1].name.includes("平夹"));
+  assert.match(mon.exercises[0].setsReps, /力竭激活/);
+  assert.equal(mon.warmup.length, 3);
+  assert.ok(mon.warmup[0].includes("泡沫轴"), "周一胸日热身应为泡沫轴专属版");
+  // 非周一胸日（周三背日）热身用通用版
+  const wed = p.schedule[2];
+  assert.ok(wed.warmup[0].includes("提升心率"), "其他训练日热身应为通用版");
+});
+
+test("起始重量合理：60kg 新手男的哑铃平板卧推在 5-12.5kg/只 区间", () => {
+  // 让胸日落在周三（避开周一胸日专属模板，验证通用引擎）
+  const p = generateFitnessPlan(baseInput({ parts: ["背", "胸", "腿"] }));
+  const chest = p.schedule.find((d) => d.type === "胸日");
+  assert.ok(chest, "应存在胸日");
+  const bench = chest!.exercises.find((e) => e.name === "哑铃平板卧推");
   assert.ok(bench, "胸日应含哑铃平板卧推");
-  const kg = parseFloat(bench.startWeight);
-  assert.ok(kg >= 5 && kg <= 12.5, `实际 ${bench.startWeight}`);
-  assert.ok(bench.startWeight.includes("/ 只"), "哑铃标注每只重量");
+  const kg = parseFloat(bench!.startWeight);
+  assert.ok(kg >= 5 && kg <= 12.5, `实际 ${bench!.startWeight}`);
+  assert.ok(bench!.startWeight.includes("/ 只"), "哑铃标注每只重量");
 });
 
 test("营养：有体脂率走 Katch-McArdle，增肌 +250", () => {

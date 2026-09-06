@@ -1,8 +1,8 @@
 "use client";
 import Link from "next/link";
 
-import { useEffect, useMemo, useState } from "react";
-import type { FitnessPlan, DayPlan, MealPlan } from "@/lib/fitness";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { FitnessPlan, DayPlan, Exercise, MealPlan } from "@/lib/fitness";
 
 const ALL_DAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 const PLACE_EMOJI: Record<string, string> = { 健身房: "🏟️", 家里: "🏠", 户外: "🌳" };
@@ -27,20 +27,323 @@ function dateStr(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function MealCard({ title, when, items, accent }: { title: string; when: string; items: string[]; accent?: boolean }) {
+// 时间线打勾项的读写上下文（由 PlanView 注入，落库 check_items）
+type CheckCtx = {
+  get: (item: string) => boolean;
+  toggle: (item: string) => void;
+};
+
+// 兜底：无上下文时的空实现（不影响渲染）
+const NOOP_CHECK: CheckCtx = { get: () => false, toggle: () => {} };
+
+// 可勾选的一行：热身步骤 / 餐内每一条
+function CheckRow({ item, ctx, num, children }: { item: string; ctx: CheckCtx; num?: number; children: React.ReactNode }) {
+  const checked = ctx.get(item);
+  return (
+    <button
+      onClick={() => ctx.toggle(item)}
+      aria-pressed={checked}
+      className="flex w-full items-start gap-2 text-left"
+    >
+      <span
+        aria-hidden
+        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-md border text-[9px] leading-none ${
+          checked ? "border-emerald-500 bg-emerald-500 text-zinc-950" : "border-zinc-700 text-zinc-500"
+        }`}
+      >
+        {checked ? "✓" : num ?? ""}
+      </span>
+      <span className={`flex-1 text-xs leading-5 ${checked ? "text-emerald-300 line-through opacity-80" : "text-zinc-300"}`}>
+        {children}
+      </span>
+    </button>
+  );
+}
+
+function MealCard({
+  title,
+  when,
+  items,
+  accent,
+  check,
+}: {
+  title: string;
+  when?: string;
+  items: string[];
+  accent?: boolean;
+  /** 传入后该餐的每一条都可勾选，prefix 需在当天内唯一（如 lunch/snack/dinner） */
+  check?: CheckCtx & { prefix: string };
+}) {
   return (
     <div className={`rounded-2xl border p-3.5 ${accent ? "border-emerald-700/50 bg-emerald-950/20" : "border-zinc-800 bg-zinc-900/50"}`}>
       <div className="flex items-baseline justify-between">
         <span className={`text-xs font-semibold ${accent ? "text-emerald-400" : "text-zinc-200"}`}>{title}</span>
         {when && <span className="text-[10px] text-zinc-500">{when}</span>}
       </div>
-      <ul className="mt-2 space-y-1">
-        {items.map((it, i) => (
-          <li key={i} className="text-xs leading-5 text-zinc-400">
-            · {it}
-          </li>
-        ))}
+      <ul className="mt-2 space-y-1.5">
+        {items.map((it, i) =>
+          check ? (
+            <li key={i}>
+              <CheckRow item={`${check.prefix}:${i}`} ctx={check}>
+                {it}
+              </CheckRow>
+            </li>
+          ) : (
+            <li key={i} className="text-xs leading-5 text-zinc-400">
+              · {it}
+            </li>
+          ),
+        )}
       </ul>
+    </div>
+  );
+}
+
+function TimelineItem({ time, title, children, accent }: { time: string; title: string; children: React.ReactNode; accent?: boolean }) {
+  return (
+    <div className="flex gap-3">
+      <div className="flex w-12 shrink-0 flex-col items-end pt-0.5">
+        <span className={`text-[11px] font-semibold tabular-nums ${accent ? "text-emerald-400" : "text-zinc-300"}`}>{time}</span>
+      </div>
+      <div className="flex-1 pb-1">
+        <p className={`text-[11px] ${accent ? "text-emerald-400" : "text-zinc-500"}`}>{title}</p>
+        <div className="mt-1.5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- 每天固定餐次 + 爬楼机：单一来源 ----------
+// 训练日时间线 / 休息日时间线共用同一份时间表与卡片，避免两处改漏（曾出过中餐 08:00 这种不一致）
+const DAY_TIMES = {
+  lunch: "12:00",
+  snack: "15:00",
+  stair: "16:30",
+  dinner: "17:30",
+} as const;
+
+// 阻力等级形如 "5-7"，取下界展示；解析失败给个安全兜底，避免显示 "阻力 NaN"
+function stairLevelFloor(level: string): number {
+  const n = parseInt(level.split("-")[0] ?? "", 10);
+  return Number.isFinite(n) ? n : 5;
+}
+
+function StairClimberCard({
+  stairClimber,
+  restNote,
+}: {
+  stairClimber: MealPlan["stairClimber"];
+  restNote?: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-cyan-800/40 bg-cyan-950/15 p-3.5">
+      <div className="flex flex-wrap gap-1.5">
+        <span className="rounded-full bg-cyan-900/40 px-2 py-0.5 text-[10px] text-cyan-300">阻力 {stairClimber.level}</span>
+        <span className="rounded-full bg-cyan-900/40 px-2 py-0.5 text-[10px] text-cyan-300">心率 {stairClimber.hrZone}</span>
+        <span className="rounded-full bg-zinc-800/80 px-2 py-0.5 text-[10px] text-zinc-400">{stairClimber.durationMin} 分钟</span>
+      </div>
+      {restNote ? (
+        <p className="mt-2 text-[11px] leading-5 text-zinc-400">
+          休息日做爬楼机可选：强度降到阻力 {stairLevelFloor(stairClimber.level)}，保持心率 ≤{stairClimber.hrZone} 即可
+        </p>
+      ) : (
+        <ul className="mt-2 space-y-1">
+          {stairClimber.cues.map((c, i) => (
+            <li key={i} className="text-[11px] leading-5 text-zinc-300">
+              · {c}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// 中餐/下午加餐/爬楼机/晚餐 这一段的共用渲染（训练日与休息日都插入自己前面的早间内容之后）
+function SharedMealClock({
+  meals,
+  stairClimber,
+  restVariant,
+  check,
+}: {
+  meals: MealPlan;
+  stairClimber: MealPlan["stairClimber"];
+  restVariant?: boolean;
+  check?: CheckCtx;
+}) {
+  const mealsItems = (key: string, fallback: string[]) =>
+    meals.meals.find((m) => m.name.includes(key))?.items ?? fallback;
+  return (
+    <>
+      <TimelineItem time={DAY_TIMES.lunch} title="中餐">
+        <MealCard
+          title="🍚 中餐"
+          items={mealsItems("午餐", ["鸡胸/牛肉 150g", "米饭 1-1.5 碗", "蔬菜不限量"])}
+          check={check ? { ...check, prefix: "lunch" } : undefined}
+        />
+      </TimelineItem>
+
+      <TimelineItem time={DAY_TIMES.snack} title="下午加餐">
+        <MealCard
+          title="🥛 下午加餐"
+          items={mealsItems("加餐", ["希腊酸奶 1 杯 或 鸡蛋白 2 个", "坚果一小把（10g）"])}
+          check={check ? { ...check, prefix: "snack" } : undefined}
+        />
+      </TimelineItem>
+
+      <TimelineItem time={DAY_TIMES.stair} title={`爬楼机 · ${stairClimber.durationMin} 分钟`}>
+        <StairClimberCard stairClimber={stairClimber} restNote={restVariant} />
+      </TimelineItem>
+
+      <TimelineItem time={DAY_TIMES.dinner} title="晚餐">
+        <MealCard
+          title="🥗 晚餐"
+          items={mealsItems("晚餐", ["鸡胸/鱼虾 150g", "红薯 150g 或 米饭半碗", "蔬菜不限量"])}
+          check={check ? { ...check, prefix: "dinner" } : undefined}
+        />
+      </TimelineItem>
+    </>
+  );
+}
+
+// 单个动作行：勾选 + 3 个输入框 + 自动保存
+function ExerciseRow({ ex, dateIso }: { ex: Exercise; dateIso: string }) {
+  const [state, setState] = useState({ checked: false, weight: "", reps: "", sets: "" });
+  const [loaded, setLoaded] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // 该日期是否原本就有记录：无记录且未改动时跳过自动保存，不写空行
+  const hadRow = useRef(false);
+
+  // 加载历史（组件随日期 key 重挂载，天然无上一日残留数据）
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/exercise-logs?date=${dateIso}&name=${encodeURIComponent(ex.name)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((row: { checked: number; weight: string; reps: string; sets: string } | null) => {
+        if (!alive) return;
+        if (row) {
+          hadRow.current = true;
+          setState({
+            checked: !!row.checked,
+            weight: row.weight ?? "",
+            reps: row.reps ?? "",
+            sets: row.sets ?? "",
+          });
+        }
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+    return () => {
+      alive = false;
+    };
+  }, [dateIso, ex.name]);
+
+  // 自动保存（debounce 500ms；失败提示，下个动作会自动再试）
+  useEffect(() => {
+    if (!loaded) return;
+    const isClean = !state.checked && !state.weight && !state.reps && !state.sets;
+    if (isClean && !hadRow.current) return; // 从未改过，别为每个动作写空行
+    setSaveState("saving");
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/exercise-logs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            date: dateIso,
+            name: ex.name,
+            checked: state.checked,
+            weight: state.weight,
+            reps: state.reps,
+            sets: state.sets,
+          }),
+        });
+        if (!res.ok) throw new Error("save failed");
+        hadRow.current = true;
+        setSaveState("saved");
+      } catch {
+        setSaveState("error");
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [state, dateIso, ex.name, loaded]);
+
+  function update<K extends keyof typeof state>(key: K, val: (typeof state)[K]) {
+    setState((s) => ({ ...s, [key]: val }));
+  }
+
+  const inputCls =
+    "w-full rounded-md border border-zinc-800 bg-zinc-950/60 px-1.5 py-1 text-center text-[11px] tabular-nums text-zinc-200 outline-none focus:border-emerald-600 focus:bg-zinc-900";
+
+  return (
+    <div
+      className={`flex items-start gap-2 border-b border-zinc-900 px-3 py-2.5 last:border-b-0 ${
+        state.checked ? "bg-emerald-950/30" : "bg-zinc-950/40"
+      }`}
+    >
+      <button
+        onClick={() => update("checked", !state.checked)}
+        aria-pressed={state.checked}
+        aria-label={state.checked ? "已完成" : "未完成"}
+        className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${
+          state.checked ? "border-emerald-500 bg-emerald-500 text-zinc-950" : "border-zinc-700 bg-transparent"
+        }`}
+      >
+        {state.checked && <span className="text-[12px] font-bold leading-none">✓</span>}
+      </button>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline justify-between gap-2">
+          <p className={`text-xs font-medium ${state.checked ? "text-emerald-300 line-through" : "text-zinc-200"}`}>
+            {ex.name}
+          </p>
+          <span className="shrink-0 text-[10px] text-zinc-600">起 {ex.startWeight}</span>
+        </div>
+        <p className="mt-0.5 text-[10px] text-zinc-500">
+          {ex.muscle} · 计划 {ex.setsReps} · 休 {ex.rest}
+        </p>
+        <p className="mt-0.5 text-[10px] leading-4 text-emerald-600/90">{ex.cue}</p>
+        <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+          <label className="block">
+            <span className="block text-center text-[9px] text-zinc-600">重量(kg)</span>
+            <input
+              inputMode="decimal"
+              className={inputCls}
+              value={state.weight}
+              onChange={(e) => update("weight", e.target.value)}
+              placeholder="—"
+            />
+          </label>
+          <label className="block">
+            <span className="block text-center text-[9px] text-zinc-600">次数</span>
+            <input
+              inputMode="numeric"
+              className={inputCls}
+              value={state.reps}
+              onChange={(e) => update("reps", e.target.value)}
+              placeholder="—"
+            />
+          </label>
+          <label className="block">
+            <span className="block text-center text-[9px] text-zinc-600">组数</span>
+            <input
+              inputMode="numeric"
+              className={inputCls}
+              value={state.sets}
+              onChange={(e) => update("sets", e.target.value)}
+              placeholder="—"
+            />
+          </label>
+        </div>
+        {loaded && saveState === "saving" && (
+          <span className="mt-1 block text-right text-[9px] text-zinc-500">保存中…</span>
+        )}
+        {saveState === "saved" && (
+          <span className="mt-1 block text-right text-[9px] text-emerald-500/90">✓ 已自动保存</span>
+        )}
+        {saveState === "error" && (
+          <span className="mt-1 block text-right text-[9px] text-red-400">保存失败，再改动会自动重试</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -48,98 +351,135 @@ function MealCard({ title, when, items, accent }: { title: string; when: string;
 function TrainingDay({
   day,
   meals,
+  warmup,
+  stairClimber,
   dateIso,
   done,
-  onComplete,
+  check,
+  onSetDone,
 }: {
   day: DayPlan;
   meals: MealPlan;
+  warmup: string[];
+  stairClimber: MealPlan["stairClimber"];
   dateIso: string;
   done: boolean;
-  onComplete: () => void;
+  check?: CheckCtx;
+  onSetDone: (next: boolean) => Promise<boolean>;
 }) {
   const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState(false);
 
-  async function complete() {
+  async function toggleDone() {
+    if (saving) return;
     setSaving(true);
-    try {
-      await fetch("/api/records", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          date: dateIso,
-          training: `${day.type} · ${day.place} · ${day.exercises.length}个动作`,
-          diet: "练前餐 + 练后餐已执行",
-          calories: "",
-          done: true,
-        }),
-      });
-      onComplete();
-    } finally {
-      setSaving(false);
-    }
+    setSaveErr(false);
+    const ok = await onSetDone(!done); // done → 再点一次取消，防误触后无法恢复
+    if (!ok) setSaveErr(true);
+    setSaving(false);
   }
 
   return (
-    <div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="rounded-full bg-zinc-800/80 px-2.5 py-1 text-[11px] text-zinc-300">
-          {PLACE_EMOJI[day.place] ?? "📍"} {day.place}
-        </span>
-        <span className="rounded-full bg-emerald-950/60 px-2.5 py-1 text-[11px] text-emerald-400">{day.slot}</span>
-        <span className="rounded-full bg-zinc-800/80 px-2.5 py-1 text-[11px] text-zinc-400">≈{day.minutes} 分钟</span>
+    <div className="space-y-5">
+      {/* 1. 热身（最前）：每步可勾选，一步步确认 */}
+      <div className="rounded-2xl border border-amber-800/40 bg-amber-950/15 p-3.5">
+        <div className="flex items-baseline justify-between">
+          <p className="text-xs font-semibold text-amber-300">🔥 热身（每次开练前 · 10 分钟）</p>
+          <span className="text-[10px] text-zinc-500">每步点一下确认</span>
+        </div>
+        <div className="mt-2 space-y-1.5">
+          {warmup.map((w, i) => (
+            <CheckRow key={i} item={`warmup:${i}`} ctx={check ?? NOOP_CHECK} num={i + 1}>
+              {w}
+            </CheckRow>
+          ))}
+        </div>
       </div>
 
-      <div className="mt-3 space-y-2.5">
-        <MealCard title="🍌 练前吃" when={meals.preWorkout.when} items={meals.preWorkout.items} />
-        <MealCard title="🍗 练后吃" when={meals.postWorkout.when} items={meals.postWorkout.items} accent />
+      {/* 2. 时间线 */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-zinc-200">⏰ 今天的时间线</h3>
+
+        <TimelineItem time="05:00" title="起床">
+          <p className="text-[11px] text-zinc-500">洗漱 + 200ml 水</p>
+        </TimelineItem>
+
+        <TimelineItem time="05:10" title="早餐">
+          <MealCard
+            title="🍳 早餐"
+            items={["鸡蛋 2 个 + 燕麦 50g", "牛奶 250ml", "香蕉或苹果 1 个"]}
+            check={check ? { ...check, prefix: "breakfast" } : undefined}
+          />
+        </TimelineItem>
+
+        <TimelineItem time="05:30" title="练前吃（练前 30-60 分钟）">
+          <MealCard
+            title="🍌 练前吃"
+            when={meals.preWorkout.when}
+            items={meals.preWorkout.items}
+            accent
+            check={check ? { ...check, prefix: "pre" } : undefined}
+          />
+        </TimelineItem>
+
+        <TimelineItem time="06:00" title={`出发去${day.place}，开练 ${day.place}`}>
+          <div className="flex flex-wrap gap-1.5">
+            <span className="rounded-full bg-zinc-800/80 px-2 py-0.5 text-[10px] text-zinc-300">
+              {PLACE_EMOJI[day.place] ?? "📍"} {day.place}
+            </span>
+            <span className="rounded-full bg-emerald-950/60 px-2 py-0.5 text-[10px] text-emerald-400">{day.slot}</span>
+            <span className="rounded-full bg-zinc-800/80 px-2 py-0.5 text-[10px] text-zinc-400">≈{day.minutes} 分钟</span>
+          </div>
+        </TimelineItem>
+
+        {/* 动作表（带勾选 + 输入） */}
+        <div className="mt-3 mb-3 overflow-hidden rounded-2xl border border-zinc-800">
+          <div className="flex items-baseline justify-between border-b border-zinc-800 bg-zinc-900 px-3 py-2">
+            <p className="text-xs font-semibold text-emerald-400">🎯 动作（点击打勾 · 填重量/次数/组数）</p>
+            <span className="text-[10px] text-zinc-500">{day.exercises.length} 个</span>
+          </div>
+          {day.exercises.map((ex, i) => (
+            <ExerciseRow key={`${dateIso}-${i}`} ex={ex} dateIso={dateIso} />
+          ))}
+        </div>
+
+        <TimelineItem time="07:30" title="练后吃（练后 30 分钟内 · 最重要的一餐）">
+          <MealCard
+            title="🍗 练后吃"
+            when={meals.postWorkout.when}
+            items={meals.postWorkout.items}
+            accent
+            check={check ? { ...check, prefix: "post" } : undefined}
+          />
+        </TimelineItem>
+
+        <SharedMealClock meals={meals} stairClimber={stairClimber} check={check} />
       </div>
 
-      <div className="mt-3 overflow-hidden rounded-xl border border-zinc-800">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-zinc-900 text-left text-[11px] text-zinc-500">
-              <th className="px-3 py-2 font-normal">动作</th>
-              <th className="px-2 py-2 font-normal">起始重量</th>
-              <th className="px-2 py-2 font-normal">组×次</th>
-              <th className="px-2 py-2 font-normal">休息</th>
-            </tr>
-          </thead>
-          <tbody>
-            {day.exercises.map((ex, i) => (
-              <tr key={i} className={i % 2 === 0 ? "bg-zinc-950/40" : "bg-zinc-900/30"}>
-                <td className="px-3 py-2.5">
-                  <p className="text-zinc-200">{ex.name}</p>
-                  <p className="mt-0.5 text-[10px] text-zinc-500">{ex.muscle}</p>
-                  <p className="mt-0.5 text-[10px] leading-4 text-emerald-600/90">{ex.cue}</p>
-                </td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-xs text-zinc-300">{ex.startWeight}</td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-xs text-zinc-400">{ex.setsReps}</td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-xs text-zinc-500">{ex.rest}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
+      {/* 完成 / 取消（再点一次可取消，防误触后无法恢复） */}
       <button
-        onClick={complete}
-        disabled={done || saving}
-        className={`mt-3 w-full rounded-full py-3 text-sm font-medium transition-colors ${
+        onClick={toggleDone}
+        disabled={saving}
+        className={`w-full rounded-full py-3 text-sm font-medium transition-colors ${
           done
-            ? "cursor-default bg-emerald-950/60 text-emerald-400"
+            ? "bg-emerald-950/60 text-emerald-400 hover:bg-emerald-900/70"
             : "bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-60"
         }`}
       >
-        {done ? "✓ 今日已完成打卡" : saving ? "记录中…" : "✓ 练完了，打卡记录"}
+        {done ? "✓ 今日全部完成" : saving ? "记录中…" : "✓ 时间线全部走完，打卡"}
       </button>
+      {done && !saving && (
+        <p className="text-center text-[10px] text-zinc-500">已完成 —— 再点一次可取消</p>
+      )}
+      {saveErr && <p className="mt-2 text-center text-xs text-red-400">操作失败，请检查网络后重试</p>}
     </div>
   );
 }
 
-function RestDay({ meals }: { meals: MealPlan }) {
+function RestDay({ meals, warmup, stairClimber, check }: { meals: MealPlan; warmup: string[]; stairClimber: MealPlan["stairClimber"]; check?: CheckCtx }) {
   return (
-    <div>
+    <div className="space-y-5">
+      {/* 休息日可选项：走路/拉伸 */}
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
         <p className="text-sm font-medium text-zinc-200">今天休息 —— 肌肉是休息时长的</p>
         <ul className="mt-2 space-y-1 text-xs leading-5 text-zinc-400">
@@ -148,19 +488,72 @@ function RestDay({ meals }: { meals: MealPlan }) {
           <li>· 蛋白吃够，睡够 7.5 小时</li>
         </ul>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-2.5">
-        {meals.meals.map((m, i) => (
-          <MealCard key={i} title={m.name} when="" items={m.items} />
-        ))}
+
+      {/* 热身（休息日也允许做低强度）：每步可勾选 */}
+      <details className="rounded-2xl border border-amber-800/30 bg-amber-950/10 p-3.5">
+        <summary className="cursor-pointer text-xs font-semibold text-amber-300">
+          🔥 热身参考（休息日做低强度有氧时再用）
+        </summary>
+        <div className="mt-2 space-y-1.5">
+          {warmup.map((w, i) => (
+            <CheckRow key={i} item={`warmup:${i}`} ctx={check ?? NOOP_CHECK} num={i + 1}>
+              {w}
+            </CheckRow>
+          ))}
+        </div>
+      </details>
+
+      {/* 时间线（无训练，仅吃 + 爬楼机可加） */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-zinc-200">⏰ 休息日时间线</h3>
+
+        <TimelineItem time="08:00" title="起床 + 早餐（睡到自然醒）">
+          <MealCard
+            title="🍳 早餐"
+            items={meals.meals.find((m) => m.name.includes("早餐"))?.items ?? ["鸡蛋 2 个 + 燕麦 50g", "牛奶 250ml", "香蕉或苹果 1 个"]}
+            check={check ? { ...check, prefix: "breakfast" } : undefined}
+          />
+        </TimelineItem>
+
+        <SharedMealClock meals={meals} stairClimber={stairClimber} restVariant check={check} />
       </div>
     </div>
   );
 }
 
-export default function PlanView({ plan, onRestart }: { plan: FitnessPlan; onRestart: () => void }) {
-  const { overview, macros, meals, warmup, schedule, progression, notes } = plan;
+export default function PlanView({
+  plan,
+  onRestart,
+  showHeader = true,
+  showMacros = true,
+}: {
+  plan: FitnessPlan;
+  onRestart?: () => void;
+  showHeader?: boolean; // 是否显示 PlanView 自身的头部（← 返回 + 重新填写）
+  showMacros?: boolean; // 是否显示底部"每天吃多少"营养卡（首页摘要里已有，避免重复）
+}) {
+  const { overview, macros, meals, warmup, schedule } = plan;
   const [offset, setOffset] = useState(0);
   const [doneMap, setDoneMap] = useState<Record<string, boolean>>({});
+
+  // 兜底：旧版缓存 plan 缺新字段（爬楼机等）时不炸屏
+  const safeMeals = useMemo(() => {
+    const m = meals ?? ({} as MealPlan);
+    return {
+      ...m,
+      stairClimber: m.stairClimber ?? {
+        durationMin: 30,
+        level: "5-7",
+        hrZone: "119-139 bpm",
+        slot: "下午加餐后 / 晚餐前（16:30 左右）",
+        cues: [
+          "目标心率区间 = (220 − 年龄) × 60-70%",
+          "不握扶手多消耗 ~10% 热量",
+          "阻力等级 5-7，步频稳定",
+        ],
+      },
+    };
+  }, [meals]);
 
   const viewDate = useMemo(() => {
     const d = new Date();
@@ -177,14 +570,102 @@ export default function PlanView({ plan, onRestart }: { plan: FitnessPlan; onRes
 
   // 载入已打卡记录
   useEffect(() => {
+    let alive = true;
     fetch("/api/records")
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : []))
       .then((rows: { date: string; done: number }[]) => {
+        if (!alive) return;
         const map: Record<string, boolean> = {};
         for (const r of rows ?? []) map[r.date] = !!r.done;
         setDoneMap(map);
       })
       .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // 时间线打勾项（热身 / 各餐每一条）：按日期加载
+  // 用 {iso, map} 结构：渲染时 iso 不匹配就视为空，天然避免“上一日勾选闪烁”
+  const [checksState, setChecksState] = useState<{ iso: string; map: Record<string, boolean> }>({
+    iso: "",
+    map: {},
+  });
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/check-items?date=${iso}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: { item: string; checked: number }[]) => {
+        if (!alive) return;
+        const map: Record<string, boolean> = {};
+        for (const r of rows ?? []) if (r?.item) map[r.item] = !!r.checked;
+        setChecksState({ iso, map });
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [iso]);
+  const checks = checksState.iso === iso ? checksState.map : {};
+
+  // 乐观更新 + 落库；失败回滚
+  const checkCtx: CheckCtx = {
+    get: (item) => !!checks[item],
+    toggle: (item) => {
+      const next = !checks[item];
+      setChecksState((s) => (s.iso === iso ? { ...s, map: { ...s.map, [item]: next } } : s));
+      fetch("/api/check-items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: iso, item, checked: next }),
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error("save failed");
+        })
+        .catch(() =>
+          setChecksState((s) => (s.iso === iso ? { ...s, map: { ...s.map, [item]: !next } } : s)),
+        );
+    },
+  };
+
+  // 完成 / 取消打卡（done 标记写 /api/records；再点一次即取消）
+  async function setDayDone(next: boolean): Promise<boolean> {
+    try {
+      const res = await fetch("/api/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          date: iso,
+          training: next ? `${dayPlan.type} · ${dayPlan.place} · ${dayPlan.exercises.length}个动作` : "",
+          diet: next ? "全套时间线已执行" : "",
+          calories: "",
+          done: next,
+        }),
+      });
+      if (!res.ok) return false;
+      setDoneMap((m) => ({ ...m, [iso]: next }));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // A / D 与 ← / → 快速切换日期（在输入框打字时不触发）
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
+        e.preventDefault();
+        setOffset((o) => o - 1);
+      } else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
+        e.preventDefault();
+        setOffset((o) => o + 1);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
   }, []);
 
   const label = isToday
@@ -196,24 +677,39 @@ export default function PlanView({ plan, onRestart }: { plan: FitnessPlan; onRes
         : `${viewDate.getMonth() + 1}/${viewDate.getDate()}`;
 
   return (
-    <div className="mx-auto max-w-lg px-5 pb-16 pt-5">
-      {/* 头部 */}
-      <div className="flex items-center justify-between">
-        <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
-          ←
-        </Link>
-        <span className="text-xs text-zinc-500">
-          {overview.splitName} · {overview.timeline}
-        </span>
-        <button onClick={onRestart} className="text-xs text-zinc-500 hover:text-zinc-300">
-          重新填写
-        </button>
-      </div>
+    <div className={showHeader ? "mx-auto max-w-lg px-5 pb-16 pt-5" : "pb-4"}>
+      {/* 头部（PlanView 自带；首页关闭以避免与外层头部重复） */}
+      {showHeader && (
+        <div className="flex items-center justify-between">
+          <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
+            ←
+          </Link>
+          <span className="text-xs text-zinc-500">
+            {overview.splitName} · {overview.timeline}
+          </span>
+          <button onClick={onRestart} className="text-xs text-zinc-500 hover:text-zinc-300">
+            重新填写
+          </button>
+        </div>
+      )}
+      {!showHeader && (
+        <div className="mb-3 flex items-baseline justify-between px-1">
+          <p className="text-xs text-zinc-500">
+            {overview.splitName} · {overview.timeline}
+          </p>
+          {onRestart && (
+            <button onClick={onRestart} className="text-[10px] text-zinc-500 hover:text-zinc-300">
+              重新填写
+            </button>
+          )}
+        </div>
+      )}
 
       {/* 日期导航 */}
       <div className="mt-4 flex items-center justify-between">
         <button
           onClick={() => setOffset(offset - 1)}
+          aria-label="前一天"
           className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-800 text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200"
         >
           ←
@@ -228,6 +724,7 @@ export default function PlanView({ plan, onRestart }: { plan: FitnessPlan; onRes
         </div>
         <button
           onClick={() => setOffset(offset + 1)}
+          aria-label="后一天"
           className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-800 text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-200"
         >
           →
@@ -259,124 +756,41 @@ export default function PlanView({ plan, onRestart }: { plan: FitnessPlan; onRes
       {/* 当日内容 */}
       <div className="mt-5">
         {dayPlan.type === "休息" ? (
-          <RestDay meals={meals} />
+          <RestDay meals={safeMeals} warmup={warmup} stairClimber={safeMeals.stairClimber} check={checkCtx} />
         ) : (
           <TrainingDay
             day={dayPlan}
-            meals={meals}
+            meals={safeMeals}
+            warmup={dayPlan.warmup && dayPlan.warmup.length > 0 ? dayPlan.warmup : warmup}
+            stairClimber={safeMeals.stairClimber}
             dateIso={iso}
             done={done}
-            onComplete={() => setDoneMap({ ...doneMap, [iso]: true })}
+            check={checkCtx}
+            onSetDone={setDayDone}
           />
         )}
       </div>
+      <p className="mt-2 text-center text-[10px] text-zinc-600">快捷键：← → 或 A / D 切换日期</p>
 
-      {/* 营养数字卡 */}
-      <h2 className="mt-10 text-base font-semibold text-zinc-100">🍽️ 每天吃多少</h2>
-      <div className="mt-3 grid grid-cols-3 gap-2.5">
-        <StatCard label="基础代谢 BMR" value={macros.bmr} unit="kcal" />
-        <StatCard label="每日消耗 TDEE" value={macros.tdee} unit="kcal" />
-        <StatCard label={macros.targetLabel} value={macros.targetKcal} unit="kcal" accent />
-      </div>
-      <div className="mt-2.5 grid grid-cols-3 gap-2.5">
-        <StatCard label="蛋白质" value={macros.protein} unit="g" accent />
-        <StatCard label="碳水" value={macros.carb} unit="g" />
-        <StatCard label="脂肪" value={macros.fat} unit="g" />
-      </div>
-      <p className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs leading-5 text-zinc-400">
-        {macros.note}
-      </p>
-
-      {/* 每日三餐 */}
-      <h2 className="mt-8 text-base font-semibold text-zinc-100">🥗 平时三餐怎么吃</h2>
-      <div className="mt-3 grid grid-cols-2 gap-2.5">
-        {meals.meals.map((m, i) => (
-          <MealCard key={i} title={m.name} when="" items={m.items} />
-        ))}
-      </div>
-
-      {/* 采购清单 */}
-      <h2 className="mt-8 text-base font-semibold text-zinc-100">🛒 每周采购清单</h2>
-      <div className="mt-3 overflow-hidden rounded-xl border border-zinc-800">
-        <table className="w-full text-sm">
-          <tbody>
-            {meals.shopping.map((s, i) => (
-              <tr key={i} className={i % 2 === 0 ? "bg-zinc-950/40" : "bg-zinc-900/30"}>
-                <td className="px-3 py-2.5 text-zinc-200">{s.item}</td>
-                <td className="whitespace-nowrap px-2 py-2.5 text-xs text-emerald-400">{s.amount}</td>
-                <td className="px-2 py-2.5 text-[10px] leading-4 text-zinc-500">{s.note}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 购买渠道 */}
-      <h2 className="mt-8 text-base font-semibold text-zinc-100">📍 去哪儿买</h2>
-      <div className="mt-3 grid grid-cols-2 gap-2.5">
-        {meals.channels.map((c, i) => (
-          <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
-            <p className="text-xs font-medium text-zinc-200">{c.name}</p>
-            <p className="mt-1 text-[10px] leading-4 text-zinc-500">{c.why}</p>
+      {/* 营养数字卡（首页关闭——摘要已有） */}
+      {showMacros && (
+        <>
+          <h2 className="mt-10 text-base font-semibold text-zinc-100">🍽️ 每天吃多少</h2>
+          <div className="mt-3 grid grid-cols-3 gap-2.5">
+            <StatCard label="基础代谢 BMR" value={macros.bmr} unit="kcal" />
+            <StatCard label="每日消耗 TDEE" value={macros.tdee} unit="kcal" />
+            <StatCard label={macros.targetLabel} value={macros.targetKcal} unit="kcal" accent />
           </div>
-        ))}
-      </div>
-
-      {/* 厨具 */}
-      <h2 className="mt-8 text-base font-semibold text-zinc-100">🍳 厨具入门（一套 ≈¥300）</h2>
-      <div className="mt-3 space-y-2">
-        {meals.gear.map((g, i) => (
-          <div key={i} className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
-            <span className="flex-1 text-xs font-medium text-zinc-200">{g.item}</span>
-            <span className="whitespace-nowrap text-[11px] text-emerald-400">{g.price}</span>
-            <span className="w-1/2 text-[10px] leading-4 text-zinc-500">{g.why}</span>
+          <div className="mt-2.5 grid grid-cols-3 gap-2.5">
+            <StatCard label="蛋白质" value={macros.protein} unit="g" accent />
+            <StatCard label="碳水" value={macros.carb} unit="g" />
+            <StatCard label="脂肪" value={macros.fat} unit="g" />
           </div>
-        ))}
-      </div>
-
-      {/* 热身 */}
-      <h2 className="mt-8 text-base font-semibold text-zinc-100">🔥 每次开练前（10 分钟）</h2>
-      <div className="mt-3 space-y-2">
-        {warmup.map((w, i) => (
-          <div key={i} className="flex items-start gap-2.5 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs leading-5 text-zinc-300">
-            <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-800 text-[9px] text-zinc-400">
-              {i + 1}
-            </span>
-            {w}
-          </div>
-        ))}
-      </div>
-
-      {/* 渐进周期 */}
-      <h2 className="mt-8 text-base font-semibold text-zinc-100">📈 4 周怎么加重</h2>
-      <div className="mt-3 space-y-2.5">
-        {progression.map((p, i) => (
-          <div key={i} className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3.5">
-            <div className="flex items-baseline gap-2">
-              <span className="text-xs font-semibold text-emerald-400">{p.week}</span>
-              <span className="text-xs font-medium text-zinc-200">{p.focus}</span>
-            </div>
-            <p className="mt-1.5 text-xs leading-5 text-zinc-400">{p.how}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* 注意事项 */}
-      <h2 className="mt-8 text-base font-semibold text-zinc-100">⚡ 必须知道的事</h2>
-      <div className="mt-3 space-y-2.5">
-        {notes.map((n, i) => (
-          <div
-            key={i}
-            className={`rounded-xl border p-3.5 text-xs leading-5 ${
-              n.startsWith("⚠️")
-                ? "border-amber-800/50 bg-amber-950/20 text-amber-200/90"
-                : "border-zinc-800 bg-zinc-900/50 text-zinc-300"
-            }`}
-          >
-            {n}
-          </div>
-        ))}
-      </div>
+          <p className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs leading-5 text-zinc-400">
+            {macros.note}
+          </p>
+        </>
+      )}
     </div>
   );
 }
