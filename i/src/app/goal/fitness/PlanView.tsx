@@ -205,64 +205,60 @@ function TimelineItem({
   title: string;
   children: React.ReactNode;
   accent?: boolean;
-  /** 该条是否展开改时间；直接点左侧时间即可进入，无需先点任何按钮 */
+  /** 时间以紧凑小胶囊显示在与标题同一行，不占整列；点了直接改 */
   open?: boolean;
   onOpen?: () => void;
   onTime?: (t: string) => void;
   onHide?: () => void;
 }) {
   return (
-    <div className="flex gap-3">
-      <div className="flex w-14 shrink-0 flex-col items-end pt-0.5">
+    <div className="min-w-0">
+      <div className="flex items-start gap-2">
         {open && onTime ? (
           <input
             value={time}
             onChange={(e) => onTime(e.target.value)}
             aria-label={`${title} 的时间`}
             autoFocus
-            className="w-14 rounded-md border border-zinc-700 bg-zinc-950/80 px-1 py-0.5 text-right text-[11px] font-semibold tabular-nums text-emerald-300 outline-none focus:border-emerald-500"
+            className="w-14 shrink-0 rounded-md border border-zinc-700 bg-zinc-950/80 px-1 py-0.5 text-right text-[11px] font-semibold tabular-nums text-emerald-300 outline-none focus:border-emerald-500"
           />
         ) : (
           <button
             type="button"
             onClick={onOpen}
             aria-label={`改「${title}」的时间`}
-            className={`rounded px-0.5 py-0.5 text-[11px] font-semibold tabular-nums transition-colors hover:bg-zinc-800 ${
-              accent ? "text-emerald-400" : "text-zinc-300"
-            }`}
+            className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums transition-colors ${
+              accent ? "bg-emerald-950/60 text-emerald-400" : "bg-zinc-800/80 text-zinc-300"
+            } hover:bg-zinc-700`}
           >
             {time}
           </button>
         )}
+        <p className={`min-w-0 flex-1 pt-0.5 text-[11px] ${accent ? "text-emerald-400" : "text-zinc-500"}`}>{title}</p>
+        {open && (
+          <span className="flex shrink-0 items-center gap-1.5 pt-0.5">
+            {onHide && (
+              <button
+                onClick={onHide}
+                aria-label={`删除「${title}」`}
+                className="rounded-md border border-red-900/60 px-1.5 py-0.5 text-[10px] text-red-400 hover:border-red-700"
+              >
+                ✕
+              </button>
+            )}
+            {onOpen && (
+              <button
+                onClick={onOpen}
+                aria-label="收起编辑"
+                className="rounded-md border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:border-zinc-500"
+              >
+                ✓
+              </button>
+            )}
+          </span>
+        )}
       </div>
-      <div className="min-w-0 flex-1 pb-1">
-        <div className="flex items-start justify-between gap-1">
-          <p className={`text-[11px] ${accent ? "text-emerald-400" : "text-zinc-500"}`}>{title}</p>
-          {open && (
-            <span className="flex shrink-0 items-center gap-1.5">
-              {onHide && (
-                <button
-                  onClick={onHide}
-                  aria-label={`删除「${title}」`}
-                  className="rounded-md border border-red-900/60 px-1.5 py-0.5 text-[10px] text-red-400 hover:border-red-700"
-                >
-                  ✕ 删除
-                </button>
-              )}
-              {onOpen && (
-                <button
-                  onClick={onOpen}
-                  aria-label="收起编辑"
-                  className="rounded-md border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:border-zinc-500"
-                >
-                  ✓ 完成
-                </button>
-              )}
-            </span>
-          )}
-        </div>
-        <div className="mt-1.5">{children}</div>
-      </div>
+      <div className="mt-1.5">{children}</div>
     </div>
   );
 }
@@ -418,19 +414,17 @@ function CustomTaskRow({
     );
   }
   return (
-    <div className="flex items-center gap-2">
-      <div className="w-14 shrink-0 text-right">
-        <button
-          type="button"
-          onClick={() => setEdit(true)}
-          aria-label="改这条事项的时间"
-          className={`rounded px-0.5 py-0.5 text-[11px] font-semibold tabular-nums transition-colors hover:bg-zinc-800 ${
-            checked ? "text-emerald-400" : "text-zinc-300"
-          }`}
-        >
-          {c.time}
-        </button>
-      </div>
+    <div className="flex items-start gap-2">
+      <button
+        type="button"
+        onClick={() => setEdit(true)}
+        aria-label="改这条事项的时间"
+        className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums transition-colors ${
+          checked ? "bg-emerald-950/60 text-emerald-400" : "bg-zinc-800/80 text-zinc-300"
+        } hover:bg-zinc-700`}
+      >
+        {c.time}
+      </button>
       <div className="min-w-0 flex-1">
         <CheckRow item={`custom:${c.id ?? index}`} ctx={check ?? NOOP_CHECK}>
           {c.title}
@@ -440,7 +434,7 @@ function CustomTaskRow({
       <button
         onClick={() => handle.removeCustom(index)}
         aria-label="删除这条事项"
-        className="shrink-0 px-1 text-[11px] text-zinc-600 hover:text-red-400"
+        className="shrink-0 px-1 pt-0.5 text-[11px] text-zinc-600 hover:text-red-400"
       >
         ✕
       </button>
