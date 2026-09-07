@@ -205,7 +205,7 @@ function TimelineItem({
   title: string;
   children: React.ReactNode;
   accent?: boolean;
-  /** 该条是否展开编辑（时间输入框 + 删除按钮）；点标题右侧 ✎ 切换 */
+  /** 该条是否展开改时间；直接点左侧时间即可进入，无需先点任何按钮 */
   open?: boolean;
   onOpen?: () => void;
   onTime?: (t: string) => void;
@@ -219,16 +219,26 @@ function TimelineItem({
             value={time}
             onChange={(e) => onTime(e.target.value)}
             aria-label={`${title} 的时间`}
+            autoFocus
             className="w-14 rounded-md border border-zinc-700 bg-zinc-950/80 px-1 py-0.5 text-right text-[11px] font-semibold tabular-nums text-emerald-300 outline-none focus:border-emerald-500"
           />
         ) : (
-          <span className={`text-[11px] font-semibold tabular-nums ${accent ? "text-emerald-400" : "text-zinc-300"}`}>{time}</span>
+          <button
+            type="button"
+            onClick={onOpen}
+            aria-label={`改「${title}」的时间`}
+            className={`rounded px-0.5 py-0.5 text-[11px] font-semibold tabular-nums transition-colors hover:bg-zinc-800 ${
+              accent ? "text-emerald-400" : "text-zinc-300"
+            }`}
+          >
+            {time}
+          </button>
         )}
       </div>
       <div className="min-w-0 flex-1 pb-1">
         <div className="flex items-start justify-between gap-1">
           <p className={`text-[11px] ${accent ? "text-emerald-400" : "text-zinc-500"}`}>{title}</p>
-          {open ? (
+          {open && (
             <span className="flex shrink-0 items-center gap-1.5">
               {onHide && (
                 <button
@@ -243,22 +253,12 @@ function TimelineItem({
                 <button
                   onClick={onOpen}
                   aria-label="收起编辑"
-                  className="px-1 text-[11px] text-zinc-500 hover:text-zinc-300"
+                  className="rounded-md border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:border-zinc-500"
                 >
-                  ✓
+                  ✓ 完成
                 </button>
               )}
             </span>
-          ) : (
-            onOpen && (
-              <button
-                onClick={onOpen}
-                aria-label={`修改「${title}」的时间或删除`}
-                className="shrink-0 px-1 text-[11px] text-zinc-600 hover:text-emerald-400"
-              >
-                ✎
-              </button>
-            )
           )}
         </div>
         <div className="mt-1.5">{children}</div>
@@ -395,14 +395,13 @@ function CustomTaskRow({
           value={c.time}
           onChange={(e) => handle.updateCustom(index, { time: e.target.value })}
           aria-label="时间"
-          placeholder="时间"
+          autoFocus
           className={`${inputCls} !w-14 flex-none`}
         />
         <input
           value={c.title}
           onChange={(e) => handle.updateCustom(index, { title: e.target.value })}
           aria-label="事情"
-          placeholder="要做什么"
           className={inputCls}
         />
         <button
@@ -412,10 +411,7 @@ function CustomTaskRow({
         >
           ✕
         </button>
-        <button
-          onClick={() => setEdit(false)}
-          className="shrink-0 rounded-md bg-emerald-600 px-2 py-1 text-[10px] text-white"
-        >
+        <button onClick={() => setEdit(false)} className="shrink-0 rounded-md bg-emerald-600 px-2 py-1 text-[10px] text-white">
           完成
         </button>
       </div>
@@ -424,9 +420,16 @@ function CustomTaskRow({
   return (
     <div className="flex items-center gap-2">
       <div className="w-14 shrink-0 text-right">
-        <span className={`text-[11px] font-semibold tabular-nums ${checked ? "text-emerald-400" : "text-zinc-300"}`}>
+        <button
+          type="button"
+          onClick={() => setEdit(true)}
+          aria-label="改这条事项的时间"
+          className={`rounded px-0.5 py-0.5 text-[11px] font-semibold tabular-nums transition-colors hover:bg-zinc-800 ${
+            checked ? "text-emerald-400" : "text-zinc-300"
+          }`}
+        >
           {c.time}
-        </span>
+        </button>
       </div>
       <div className="min-w-0 flex-1">
         <CheckRow item={`custom:${c.id ?? index}`} ctx={check ?? NOOP_CHECK}>
@@ -434,13 +437,6 @@ function CustomTaskRow({
           {c.note ? ` — ${c.note}` : ""}
         </CheckRow>
       </div>
-      <button
-        onClick={() => setEdit(true)}
-        aria-label="改这条事项"
-        className="shrink-0 px-1 text-[11px] text-zinc-600 hover:text-emerald-400"
-      >
-        ✎
-      </button>
       <button
         onClick={() => handle.removeCustom(index)}
         aria-label="删除这条事项"
@@ -452,35 +448,45 @@ function CustomTaskRow({
   );
 }
 
-// 时间线底部"直接加一件事"的小表单（无需进入编辑模式）
-function TaskAdder({ onAdd, placeholder }: { onAdd: (time: string, title: string) => void; placeholder?: string }) {
-  const [open, setOpen] = useState(false);
-  const [time, setTime] = useState("07:00");
+// 时间线里的细分隔线：点它就在这一行下面直接加一件事
+function AddDivider({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="-my-1 flex w-full items-center gap-2 py-0.5 text-[10px] text-zinc-700 transition-colors hover:text-emerald-400"
+    >
+      <span className="h-px flex-1 bg-zinc-800/80" />
+      <span className="shrink-0 hover:bg-emerald-950/40">＋ {label}</span>
+      <span className="h-px flex-1 bg-zinc-800/80" />
+    </button>
+  );
+}
+
+// 行内添加表单：默认填好"这一行的时间"，可改，回车即加
+function AddInPlace({
+  defaultTime,
+  onAdd,
+  onCancel,
+}: {
+  defaultTime: string;
+  onAdd: (time: string, title: string) => void;
+  onCancel: () => void;
+}) {
+  const [time, setTime] = useState(defaultTime);
   const [title, setTitle] = useState("");
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="w-full rounded-xl border border-dashed border-zinc-700 py-2 text-xs text-zinc-400 transition-colors hover:border-emerald-600 hover:text-emerald-300"
-      >
-        ＋ 给这天加一件固定的事
-      </button>
-    );
-  }
   const add = () => {
     const t = title.trim();
     if (!t) return;
     onAdd(time.trim() || "07:00", t);
-    setTitle("");
-    setOpen(false);
+    onCancel();
   };
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-2">
+    <div className="flex items-center gap-2 rounded-xl border border-emerald-900/50 bg-emerald-950/20 px-2 py-1.5">
       <input
         value={time}
         onChange={(e) => setTime(e.target.value)}
         aria-label="时间"
-        placeholder="时间"
         className="w-16 rounded-md border border-zinc-700 bg-zinc-950 px-1.5 py-1.5 text-center text-xs text-emerald-300 outline-none focus:border-emerald-500"
       />
       <input
@@ -488,25 +494,24 @@ function TaskAdder({ onAdd, placeholder }: { onAdd: (time: string, title: string
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && add()}
         aria-label="要做什么"
-        placeholder={placeholder ?? "例如：14:30 背单词"}
+        placeholder="要做什么？例如：背单词 50 个"
         autoFocus
         className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-emerald-500"
       />
       <button onClick={add} className="shrink-0 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white">
         添加
       </button>
-      <button onClick={() => setOpen(false)} className="shrink-0 px-1 text-[11px] text-zinc-500">
+      <button onClick={onCancel} className="shrink-0 px-1 text-[11px] text-zinc-500">
         取消
       </button>
     </div>
   );
 }
 
-// 时间线尾部：直接加一件事 + 已删除默认项恢复 + 重置该天
+// 时间线尾部小工具：恢复被删默认项 + 恢复该天默认模板
 function DayTail({ week }: { week: WeekHandle }) {
   return (
     <div className="mt-3 space-y-2">
-      <TaskAdder onAdd={(t, ti) => week.addCustom({ time: t, title: ti })} />
       {week.hiddenKeys.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[10px] text-zinc-500">已删除的默认项：</span>
@@ -701,6 +706,8 @@ function TrainingDay({
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const [insertKey, setInsertKey] = useState<string | null>(null);
+  const [insertTime, setInsertTime] = useState("06:00");
 
   async function toggleDone() {
     if (saving) return;
@@ -714,12 +721,13 @@ function TrainingDay({
   const ed = (section: string, fallback: string[]) => (diet ? { section, fallback, ctx: diet } : undefined);
 
   // 时间线 = 默认节点（可改时间/删除）+ 自定义事项，统一按时间排序
-  const nodes: { key: string; min: number; seq: number; el: React.ReactElement }[] = [];
+  const nodes: { key: string; time: string; min: number; seq: number; el: React.ReactElement }[] = [];
   const push = (key: string, defTime: string, seq: number, title: string, content: React.ReactNode) => {
     if (week.hidden(key)) return;
     const time = week.time(key, defTime);
     nodes.push({
       key,
+      time,
       min: timeMin(time),
       seq,
       el: (
@@ -812,6 +820,7 @@ function TrainingDay({
     const m = timeMin(c.time);
     nodes.push({
       key: `custom-${c.id ?? i}`,
+      time: c.time,
       min: Number.isNaN(m) ? Number.POSITIVE_INFINITY : m,
       seq: 1000 + i,
       el: <CustomTaskRow c={c} index={i} handle={week} check={check} />,
@@ -843,14 +852,44 @@ function TrainingDay({
       {/* 2. 时间线 */}
       <div>
         <h3 className="mb-3 text-sm font-semibold text-zinc-200">⏰ 今天的时间线</h3>
-        <div className="space-y-4">
+        <div className="space-y-1">
+          <AddDivider
+            label="在开头加一件"
+            onClick={() => {
+              setInsertKey("top");
+              setInsertTime("06:00");
+            }}
+          />
+          {insertKey === "top" && (
+            <AddInPlace
+              defaultTime={insertTime}
+              onAdd={(t, ti) => week.addCustom({ time: t, title: ti })}
+              onCancel={() => setInsertKey(null)}
+            />
+          )}
           {nodes.map((n) => (
-            <div key={n.key}>{n.el}</div>
+            <div key={n.key} className="space-y-1">
+              <div>{n.el}</div>
+              {insertKey === n.key && (
+                <AddInPlace
+                  defaultTime={insertTime}
+                  onAdd={(t, ti) => week.addCustom({ time: t, title: ti })}
+                  onCancel={() => setInsertKey(null)}
+                />
+              )}
+              <AddDivider
+                label="在这条下面加一件"
+                onClick={() => {
+                  setInsertKey(n.key);
+                  setInsertTime(n.time);
+                }}
+              />
+            </div>
           ))}
         </div>
         {nodes.length === 0 && (
           <p className="rounded-xl border border-dashed border-zinc-700 p-4 text-center text-xs text-zinc-500">
-            这一天没有安排 —— 用下面的「＋」直接加
+            这一天还没有安排 —— 用上面的「＋ 在开头加一件」直接加
           </p>
         )}
         <DayTail week={week} />
@@ -880,13 +919,16 @@ function RestDay({ meals, warmup, stairClimber, check, diet, week }: { meals: Me
   const breakfastItems = meals.meals.find((m) => m.name.includes("早餐"))?.items ?? DEFAULT_BREAKFAST;
   const ed = (section: string, fallback: string[]) => (diet ? { section, fallback, ctx: diet } : undefined);
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const [insertKey, setInsertKey] = useState<string | null>(null);
+  const [insertTime, setInsertTime] = useState("06:00");
 
-  const nodes: { key: string; min: number; seq: number; el: React.ReactElement }[] = [];
+  const nodes: { key: string; time: string; min: number; seq: number; el: React.ReactElement }[] = [];
   const push = (key: string, defTime: string, seq: number, title: string, content: React.ReactNode) => {
     if (week.hidden(key)) return;
     const time = week.time(key, defTime);
     nodes.push({
       key,
+      time,
       min: timeMin(time),
       seq,
       el: (
@@ -933,6 +975,7 @@ function RestDay({ meals, warmup, stairClimber, check, diet, week }: { meals: Me
     const m = timeMin(c.time);
     nodes.push({
       key: `custom-${c.id ?? i}`,
+      time: c.time,
       min: Number.isNaN(m) ? Number.POSITIVE_INFINITY : m,
       seq: 1000 + i,
       el: <CustomTaskRow c={c} index={i} handle={week} check={check} />,
@@ -973,14 +1016,44 @@ function RestDay({ meals, warmup, stairClimber, check, diet, week }: { meals: Me
       {/* 时间线（无训练，仅吃 + 爬楼机可加） */}
       <div>
         <h3 className="mb-3 text-sm font-semibold text-zinc-200">⏰ 休息日时间线</h3>
-        <div className="space-y-4">
+        <div className="space-y-1">
+          <AddDivider
+            label="在开头加一件"
+            onClick={() => {
+              setInsertKey("top");
+              setInsertTime("06:00");
+            }}
+          />
+          {insertKey === "top" && (
+            <AddInPlace
+              defaultTime={insertTime}
+              onAdd={(t, ti) => week.addCustom({ time: t, title: ti })}
+              onCancel={() => setInsertKey(null)}
+            />
+          )}
           {nodes.map((n) => (
-            <div key={n.key}>{n.el}</div>
+            <div key={n.key} className="space-y-1">
+              <div>{n.el}</div>
+              {insertKey === n.key && (
+                <AddInPlace
+                  defaultTime={insertTime}
+                  onAdd={(t, ti) => week.addCustom({ time: t, title: ti })}
+                  onCancel={() => setInsertKey(null)}
+                />
+              )}
+              <AddDivider
+                label="在这条下面加一件"
+                onClick={() => {
+                  setInsertKey(n.key);
+                  setInsertTime(n.time);
+                }}
+              />
+            </div>
           ))}
         </div>
         {nodes.length === 0 && (
           <p className="rounded-xl border border-dashed border-zinc-700 p-4 text-center text-xs text-zinc-500">
-            这一天没有安排 —— 用下面的「＋」直接加
+            这一天还没有安排 —— 用上面的「＋ 在开头加一件」直接加
           </p>
         )}
         <DayTail week={week} />
