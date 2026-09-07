@@ -1364,6 +1364,7 @@ export default function PlanView({
   const { overview, macros, meals, warmup, schedule } = plan;
   const [offset, setOffset] = useState(0);
   const [doneMap, setDoneMap] = useState<Record<string, boolean>>({});
+  const rootRef = useRef<HTMLDivElement>(null);
 
   // 兜底：旧版缓存 plan 缺新字段（爬楼机等）时不炸屏
   const safeMeals = useMemo(() => {
@@ -1604,6 +1605,40 @@ export default function PlanView({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // 手机：左右滑动切换日期（效果同 A/D、←→）
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    let startX = 0;
+    let startY = 0;
+    let active = false;
+    const onStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      startX = t.clientX;
+      startY = t.clientY;
+      active = true;
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (!active) return;
+      active = false;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable)) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+        if (dx > 0) setOffset((o) => o - 1); // 右滑 → 前一天
+        else setOffset((o) => o + 1); // 左滑 → 后一天
+      }
+    };
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchend", onEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchend", onEnd);
+    };
+  }, [setOffset]);
+
   const label = isToday
     ? "今天"
     : offset === 1
@@ -1613,7 +1648,7 @@ export default function PlanView({
         : `${viewDate.getMonth() + 1}/${viewDate.getDate()}`;
 
   return (
-    <div className={showHeader ? "mx-auto max-w-lg px-5 pb-16 pt-5" : "pb-4"}>
+    <div ref={rootRef} className={showHeader ? "mx-auto max-w-lg px-5 pb-16 pt-5" : "pb-4"}>
       {/* 头部（PlanView 自带；首页关闭以避免与外层头部重复） */}
       {showHeader && (
         <div className="flex items-center justify-between">
@@ -1718,7 +1753,7 @@ export default function PlanView({
           />
         )}
       </div>
-      <p className="mt-2 text-center text-[10px] text-zinc-600">快捷键：← → 或 A / D 切换日期</p>
+      <p className="mt-2 text-center text-[10px] text-zinc-600">左右滑动 / A D / ← → 都可切换日期</p>
 
       {/* 营养数字卡（首页关闭——摘要已有） */}
       {showMacros && (
