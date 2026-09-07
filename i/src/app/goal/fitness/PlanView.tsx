@@ -198,6 +198,8 @@ function TimelineItem({
   accent,
   open,
   onOpen,
+  onDone,
+  onCancel,
   onTime,
   onHide,
 }: {
@@ -208,6 +210,8 @@ function TimelineItem({
   /** 时间以紧凑小胶囊显示在与标题同一行，不占整列；点了直接改 */
   open?: boolean;
   onOpen?: () => void;
+  onDone?: () => void;
+  onCancel?: () => void;
   onTime?: (t: string) => void;
   onHide?: () => void;
 }) {
@@ -237,20 +241,31 @@ function TimelineItem({
         <p className={`min-w-0 flex-1 pt-0.5 text-[11px] ${accent ? "text-emerald-400" : "text-zinc-500"}`}>{title}</p>
         {open && (
           <span className="flex shrink-0 items-center gap-1.5 pt-0.5">
+            {onCancel && (
+              <button
+                onClick={onCancel}
+                aria-label="取消修改（还原时间）"
+                className="rounded-md border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:border-zinc-500"
+              >
+                ✕ 取消
+              </button>
+            )}
             {onHide && (
               <button
-                onClick={onHide}
+                onClick={() => {
+                  if (window.confirm(`确定删除「${title}」这一项？`)) onHide();
+                }}
                 aria-label={`删除「${title}」`}
                 className="rounded-md border border-red-900/60 px-1.5 py-0.5 text-[10px] text-red-400 hover:border-red-700"
               >
-                ✕
+                删除
               </button>
             )}
-            {onOpen && (
+            {onDone && (
               <button
-                onClick={onOpen}
-                aria-label="收起编辑"
-                className="rounded-md border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:border-zinc-500"
+                onClick={onDone}
+                aria-label="完成"
+                className="rounded-md bg-emerald-600 px-1.5 py-0.5 text-[10px] text-white"
               >
                 ✓
               </button>
@@ -380,6 +395,7 @@ function CustomTaskRow({
   check?: CheckCtx;
 }) {
   const [edit, setEdit] = useState(false);
+  const [snap, setSnap] = useState<{ time: string; title: string } | null>(null);
   const checked = check ? check.get(`custom:${c.id ?? index}`) : false;
   const inputCls =
     "min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-950/70 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-emerald-600";
@@ -401,11 +417,23 @@ function CustomTaskRow({
           className={inputCls}
         />
         <button
-          onClick={() => handle.removeCustom(index)}
-          aria-label="删除该事项"
-          className="shrink-0 rounded-md border border-zinc-800 px-1.5 py-1 text-[10px] text-red-400/90 hover:border-red-700"
+          onClick={() => {
+            if (snap) handle.updateCustom(index, snap); // 取消：还原刚才的改
+            setEdit(false);
+          }}
+          aria-label="取消修改"
+          className="shrink-0 rounded-md border border-zinc-700 px-1.5 py-1 text-[10px] text-zinc-400 hover:border-zinc-500"
         >
-          ✕
+          ✕ 取消
+        </button>
+        <button
+          onClick={() => {
+            if (window.confirm("确定删除这条事项？")) handle.removeCustom(index);
+          }}
+          aria-label="删除这条事项"
+          className="shrink-0 rounded-md border border-red-900/60 px-1.5 py-1 text-[10px] text-red-400 hover:border-red-700"
+        >
+          删除
         </button>
         <button onClick={() => setEdit(false)} className="shrink-0 rounded-md bg-emerald-600 px-2 py-1 text-[10px] text-white">
           完成
@@ -417,7 +445,10 @@ function CustomTaskRow({
     <div className="flex items-start gap-2">
       <button
         type="button"
-        onClick={() => setEdit(true)}
+        onClick={() => {
+          setSnap({ time: c.time, title: c.title });
+          setEdit(true);
+        }}
         aria-label="改这条事项的时间"
         className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums transition-colors ${
           checked ? "bg-emerald-950/60 text-emerald-400" : "bg-zinc-800/80 text-zinc-300"
@@ -432,7 +463,9 @@ function CustomTaskRow({
         </CheckRow>
       </div>
       <button
-        onClick={() => handle.removeCustom(index)}
+        onClick={() => {
+          if (window.confirm("确定删除这条事项？")) handle.removeCustom(index);
+        }}
         aria-label="删除这条事项"
         className="shrink-0 px-1 pt-0.5 text-[11px] text-zinc-600 hover:text-red-400"
       >
@@ -701,6 +734,7 @@ function TrainingDay({
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [insertKey, setInsertKey] = useState<string | null>(null);
   const [insertTime, setInsertTime] = useState("06:00");
+  const [prevTimes, setPrevTimes] = useState<Record<string, string>>({});
 
   async function toggleDone() {
     if (saving) return;
@@ -728,7 +762,16 @@ function TrainingDay({
           time={time}
           title={title}
           open={openKey === key}
-          onOpen={() => setOpenKey((k) => (k === key ? null : key))}
+          onOpen={() => {
+            setPrevTimes((p) => ({ ...p, [key]: time }));
+            setOpenKey(key);
+          }}
+          onDone={() => setOpenKey(null)}
+          onCancel={() => {
+            const p = prevTimes[key];
+            if (p != null) week.setTime(key, p);
+            setOpenKey(null);
+          }}
           onTime={(t) => week.setTime(key, t)}
           onHide={() => week.hide(key)}
         >
@@ -914,6 +957,7 @@ function RestDay({ meals, warmup, stairClimber, check, diet, week }: { meals: Me
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [insertKey, setInsertKey] = useState<string | null>(null);
   const [insertTime, setInsertTime] = useState("06:00");
+  const [prevTimes, setPrevTimes] = useState<Record<string, string>>({});
 
   const nodes: { key: string; time: string; min: number; seq: number; el: React.ReactElement }[] = [];
   const push = (key: string, defTime: string, seq: number, title: string, content: React.ReactNode) => {
@@ -929,7 +973,16 @@ function RestDay({ meals, warmup, stairClimber, check, diet, week }: { meals: Me
           time={time}
           title={title}
           open={openKey === key}
-          onOpen={() => setOpenKey((k) => (k === key ? null : key))}
+          onOpen={() => {
+            setPrevTimes((p) => ({ ...p, [key]: time }));
+            setOpenKey(key);
+          }}
+          onDone={() => setOpenKey(null)}
+          onCancel={() => {
+            const p = prevTimes[key];
+            if (p != null) week.setTime(key, p);
+            setOpenKey(null);
+          }}
           onTime={(t) => week.setTime(key, t)}
           onHide={() => week.hide(key)}
         >
