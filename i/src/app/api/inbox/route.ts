@@ -42,7 +42,15 @@ export async function POST(req: NextRequest) {
       await dbRun("DELETE FROM inbox WHERE id = ?", id);
       return NextResponse.json({ ok: true });
     }
-    return jsonErr("action 必须为 add / toggle / delete");
+    if (action === "edit") {
+      const id = Number(body.id);
+      if (!Number.isInteger(id)) return jsonErr("id 无效");
+      const text = strField(body.text, 300).trim();
+      if (!text) return jsonErr("内容不能为空");
+      await dbRun("UPDATE inbox SET text = ? WHERE id = ?", text, id);
+      return NextResponse.json({ ok: true });
+    }
+    return jsonErr("action 必须为 add / toggle / delete / edit");
   } catch {
     return jsonErr("操作待办失败，请稍后重试", 500);
   }

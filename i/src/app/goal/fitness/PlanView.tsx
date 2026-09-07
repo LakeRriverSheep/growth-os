@@ -862,10 +862,22 @@ function RestDay({ meals, warmup, stairClimber, check, diet, week }: { meals: Me
   );
 }
 
-// 全局"随手待办"：不区分日期、没定时间的事，做完打勾
-function InboxPanel() {
+// 全局"随手待办"：没定时间的事。支持：新增 / 打勾 / 删 / 改内容 / 一键排进某天某时段
+function InboxPanel({
+  currentDay,
+  onScheduleCurrent,
+}: {
+  currentDay: string;
+  onScheduleCurrent: (entry: { time: string; title: string }) => void;
+}) {
   const [items, setItems] = useState<{ id: number; text: string; checked: boolean }[]>([]);
   const [text, setText] = useState("");
+  const [msg, setMsg] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [draft, setDraft] = useState("");
+  const [schedId, setSchedId] = useState<number | null>(null);
+  const [sched, setSched] = useState({ weekday: currentDay, time: "12:00" });
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -880,7 +892,13 @@ function InboxPanel() {
     };
   }, []);
 
-  async function post(body: Record<string, unknown>) {
+  useEffect(() => {
+    if (!msg) return;
+    const t = setTimeout(() => setMsg(""), 2500);
+    return () => clearTimeout(t);
+  }, [msg]);
+
+  async function post(body: Record<string, unknown>): Promise<boolean> {
     try {
       const res = await fetch("/api/inbox", {
         method: "POST",
@@ -898,7 +916,6 @@ function InboxPanel() {
     if (!t) return;
     const ok = await post({ action: "add", text: t });
     if (ok) {
-      // 乐观插入一条（id 用时间戳占位，刷新后对齐）
       setItems((s) => [{ id: Date.now(), text: t, checked: false }, ...s]);
       setText("");
     }
@@ -911,32 +928,80 @@ function InboxPanel() {
     setItems((s) => s.filter((i) => i.id !== id));
     post({ action: "delete", id });
   }
+  async function saveEdit(id: number) {
+    const t = draft.trim();
+    if (!t) return;
+    const ok = await post({ action: "edit", id, text: t });
+    if (ok) {
+      setItems((s) => s.map((i) => (i.id === id ? { ...i, text: t } : i)));
+      setEditingId(null);
+    }
+  }
+
+  // 把某条待办排进「某天某时段」：当天直接进时间线，其它星期几写入数据库
+  async function schedule() {
+    const item = items.find((i) => i.id === schedId);
+    if (!item || busy) return;
+    setBusy(true);
+    const entry = { time: sched.time.trim() || "12:00", title: item.text };
+    try {
+      if (sched.weekday === currentDay) {
+        onScheduleCurrent(entry); // 当前页：插入时间线，自动保存
+      } else {
+        const g = await fetch(`/api/week-schedule?weekday=${encodeURIComponent(sched.weekday)}`);
+        const doc = g.ok ? ((await g.json()) as { edits: Record<string, unknown>; customs: { time: string; title: string }[] }) : null;
+        if (!doc) throw new Error("load failed");
+        const body = {
+          weekday: sched.weekday,
+          edits: doc.edits ?? {},
+          customs: [...(doc.customs ?? []), entry],
+        };
+        const res = await fetch("/api/week-schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error("save failed");
+      }
+      // 安排成功后从随手待办移除
+      await post({ action: "delete", id: item.id });
+      setItems((s) => s.filter((i) => i.id !== item.id));
+      setSchedId(null);
+      setMsg(`已安排到 ${sched.weekday} ${entry.time}：${entry.title}`);
+    } catch {
+      setMsg("安排失败，请重试");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
-    <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
-      <div className="flex items-baseline justify-between">
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-3.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-1">
         <h2 className="text-sm font-semibold text-zinc-200">🗒️ 随手待办（没定时间的事）</h2>
-        <span className="text-[10px] text-zinc-500">{items.length ? `${items.length} 条` : "想记什么就写什么"}</span>
+        <span className={`text-[10px] ${msg ? "text-emerald-400" : "text-zinc-500"}`}>
+          {msg || (items.length ? `${items.length} 条` : "想记什么就写什么，随时可安排进某天")}
+        </span>
       </div>
-      <div className="mt-3 flex gap-2">
+      <div className="mt-2 flex gap-2">
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
-          placeholder="例如：买牛奶、回复邮件、练完拉伸…"
-          className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-emerald-500 focus:outline-none"
+          placeholder="例如：买牛奶、回邮件…"
+          className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 focus:border-emerald-500 focus:outline-none"
         />
         <button
           onClick={add}
-          className="shrink-0 rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500"
+          className="shrink-0 rounded-full bg-emerald-600 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
         >
           添加
         </button>
       </div>
       {items.length > 0 && (
-        <ul className="mt-3 space-y-1">
+        <ul className="mt-2 max-h-52 space-y-1 overflow-y-auto pr-1">
           {items.map((it) => (
-            <li key={it.id} className="flex items-center gap-2">
+            <li key={it.id} className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => toggle(it.id, !it.checked)}
                 aria-pressed={it.checked}
@@ -947,16 +1012,90 @@ function InboxPanel() {
               >
                 {it.checked ? "✓" : ""}
               </button>
-              <span className={`flex-1 text-xs leading-5 ${it.checked ? "text-zinc-500 line-through" : "text-zinc-200"}`}>
-                {it.text}
-              </span>
-              <button
-                onClick={() => del(it.id)}
-                aria-label="删除该条"
-                className="shrink-0 px-1 text-[10px] text-zinc-600 hover:text-red-400"
-              >
-                ✕
-              </button>
+
+              {editingId === it.id ? (
+                <input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveEdit(it.id);
+                    if (e.key === "Escape") setEditingId(null);
+                  }}
+                  autoFocus
+                  className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 outline-none focus:border-emerald-500"
+                />
+              ) : (
+                <span className={`min-w-0 flex-1 text-xs leading-5 ${it.checked ? "text-zinc-500 line-through" : "text-zinc-200"}`}>
+                  {it.text}
+                </span>
+              )}
+
+              {editingId === it.id ? (
+                <button
+                  onClick={() => saveEdit(it.id)}
+                  className="shrink-0 rounded-md bg-emerald-600 px-2 py-0.5 text-[10px] text-white"
+                >
+                  保存
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setEditingId(it.id);
+                      setDraft(it.text);
+                    }}
+                    aria-label="改这条待办"
+                    className="shrink-0 px-1 text-[11px] text-zinc-500 hover:text-emerald-400"
+                  >
+                    ✎
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSchedId(it.id);
+                      setSched((s) => ({ ...s, weekday: currentDay }));
+                    }}
+                    aria-label="安排到某天某时"
+                    className="shrink-0 px-1 text-[11px] text-zinc-500 hover:text-emerald-400"
+                  >
+                    📅
+                  </button>
+                  <button
+                    onClick={() => del(it.id)}
+                    aria-label="删除该条"
+                    className="shrink-0 px-1 text-[10px] text-zinc-600 hover:text-red-400"
+                  >
+                    ✕
+                  </button>
+                </>
+              )}
+
+              {schedId === it.id && !(editingId === it.id) && (
+                <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-zinc-700/70 bg-zinc-950/60 px-2 py-1.5">
+                  <select
+                    value={sched.weekday}
+                    onChange={(e) => setSched((s) => ({ ...s, weekday: e.target.value }))}
+                    className="rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-[10px] text-zinc-200 outline-none"
+                  >
+                    {ALL_DAYS.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    value={sched.time}
+                    onChange={(e) => setSched((s) => ({ ...s, time: e.target.value }))}
+                    aria-label="时间"
+                    className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-center text-[10px] text-emerald-300 outline-none"
+                  />
+                  <button onClick={schedule} disabled={busy} className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-medium text-white disabled:opacity-50">
+                    安排
+                  </button>
+                  <button onClick={() => setSchedId(null)} className="px-1 text-[10px] text-zinc-500">
+                    取消
+                  </button>
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -1308,6 +1447,16 @@ export default function PlanView({
         })}
       </div>
 
+      {/* 随手待办（全局）：放日期下方、时间线上面，方便随时看到；支持改内容/安排进某天某时 */}
+      <div className="mt-4">
+        <InboxPanel
+          currentDay={dayName}
+          onScheduleCurrent={(entry) =>
+            patchDoc((d) => ({ ...d, customs: [...d.customs, { time: entry.time, title: entry.title }] }))
+          }
+        />
+      </div>
+
       {/* 编辑工具条：改时间/删项/加自己的事项（对该星期几长期生效） */}
       <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -1416,9 +1565,6 @@ export default function PlanView({
         )}
       </div>
       <p className="mt-2 text-center text-[10px] text-zinc-600">快捷键：← → 或 A / D 切换日期</p>
-
-      {/* 随手待办（全局） */}
-      <InboxPanel />
 
       {/* 营养数字卡（首页关闭——摘要已有） */}
       {showMacros && (
