@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { dbGet, dbRun, type Row } from "@/lib/db";
 import { safeJson, jsonErr } from "@/lib/http";
 
-// 可编辑饮食清单（早餐/午餐/加餐/晚餐/练前/练后 的条目增删改）
+// 可编辑饮食清单（早餐/合并练前餐/午餐/加餐/晚餐/练后 的条目增删改）
 // 独立存放，重新生成计划不会覆盖用户手改的清单。
+// premeal = 训练日合并的「早餐+练前吃」一餐
 
-const ALLOWED = new Set(["breakfast", "lunch", "snack", "dinner", "pre", "post"]);
+const ALLOWED = new Set(["breakfast", "premeal", "lunch", "snack", "dinner", "pre", "post"]);
 
 function parseSections(raw: string | undefined): Record<string, string[]> {
   if (!raw) return {};

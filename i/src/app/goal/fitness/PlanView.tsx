@@ -70,7 +70,13 @@ const DEFAULT_BREAKFAST = ["鸡蛋 2 个 + 燕麦 50g", "牛奶 250ml", "香蕉�
 const DEFAULT_LUNCH = ["鸡胸/牛肉 150g", "米饭 1-1.5 碗", "蔬菜不限量"];
 const DEFAULT_SNACK = ["希腊酸奶 1 杯 或 鸡蛋白 2 个", "坚果一小把（10g）"];
 const DEFAULT_DINNER = ["鸡胸/鱼虾 150g", "红薯 150g 或 米饭半碗", "蔬菜不限量"];
-const DEFAULT_PRE = ["香蕉 1 根 + 全麦面包 1 片（快碳供能）", "或燕麦 40g 冲泡 + 鸡蛋 1 个", "别吃撑，七成饱，练时胃不能胀"];
+const DEFAULT_PREMEAL = [
+  "黑燕麦 50g 煮（或 40g 燕麦 + 全麦面包 1 片）",
+  "全麦面包 1 片（48g）",
+  "鸡蛋 2 个（水煮 / 少油煎）",
+  "香蕉 1 根（练前快碳）",
+  "蛋白粉半勺（15g）随餐或冲燕麦",
+];
 const DEFAULT_POST = ["蛋白质 30g+：鸡胸 150g 或 鸡蛋 3 个 + 牛奶 250ml（或蛋白粉 1 勺）", "碳水 40-60g：米饭 1 碗 / 红薯 200g", "这餐吃不好，今天训练效果打 6 折"];
 
 // 默认时间线节点在「删除后恢复」时的展示名
@@ -190,7 +196,8 @@ function TimelineItem({
   title,
   children,
   accent,
-  editing,
+  open,
+  onOpen,
   onTime,
   onHide,
 }: {
@@ -198,15 +205,16 @@ function TimelineItem({
   title: string;
   children: React.ReactNode;
   accent?: boolean;
-  /** 编辑模式：时间列变成输入框，标题右侧出现隐藏按钮 */
-  editing?: boolean;
+  /** 该条是否展开编辑（时间输入框 + 删除按钮）；点标题右侧 ✎ 切换 */
+  open?: boolean;
+  onOpen?: () => void;
   onTime?: (t: string) => void;
   onHide?: () => void;
 }) {
   return (
     <div className="flex gap-3">
       <div className="flex w-14 shrink-0 flex-col items-end pt-0.5">
-        {editing && onTime ? (
+        {open && onTime ? (
           <input
             value={time}
             onChange={(e) => onTime(e.target.value)}
@@ -220,14 +228,37 @@ function TimelineItem({
       <div className="min-w-0 flex-1 pb-1">
         <div className="flex items-start justify-between gap-1">
           <p className={`text-[11px] ${accent ? "text-emerald-400" : "text-zinc-500"}`}>{title}</p>
-          {editing && onHide && (
-            <button
-              onClick={onHide}
-              aria-label={`删除「${title}」`}
-              className="shrink-0 rounded-md border border-zinc-800 px-1.5 text-[10px] text-zinc-500 hover:border-red-800 hover:text-red-400"
-            >
-              ✕ 删除
-            </button>
+          {open ? (
+            <span className="flex shrink-0 items-center gap-1.5">
+              {onHide && (
+                <button
+                  onClick={onHide}
+                  aria-label={`删除「${title}」`}
+                  className="rounded-md border border-red-900/60 px-1.5 py-0.5 text-[10px] text-red-400 hover:border-red-700"
+                >
+                  ✕ 删除
+                </button>
+              )}
+              {onOpen && (
+                <button
+                  onClick={onOpen}
+                  aria-label="收起编辑"
+                  className="px-1 text-[11px] text-zinc-500 hover:text-zinc-300"
+                >
+                  ✓
+                </button>
+              )}
+            </span>
+          ) : (
+            onOpen && (
+              <button
+                onClick={onOpen}
+                aria-label={`修改「${title}」的时间或删除`}
+                className="shrink-0 px-1 text-[11px] text-zinc-600 hover:text-emerald-400"
+              >
+                ✎
+              </button>
+            )
           )}
         </div>
         <div className="mt-1.5">{children}</div>
@@ -289,11 +320,11 @@ type WeekDoc = {
   customs: { id?: number; time: string; title: string; note?: string }[];
 };
 
-// 传给训练日/休息日视图的读写句柄
+// 传给训练日/休息日视图的读写句柄（无需先进入"编辑模式"，每条都可直接改）
 type WeekHandle = {
-  editing: boolean;
   time: (key: string, def: string) => string;
   hidden: (key: string) => boolean;
+  hiddenKeys: string[];
   setTime: (key: string, time: string) => void;
   hide: (key: string) => void;
   unhide: (key: string) => void;
@@ -301,6 +332,7 @@ type WeekHandle = {
   addCustom: (c: { time: string; title: string; note?: string }) => void;
   updateCustom: (index: number, patch: Partial<{ time: string; title: string; note: string }>) => void;
   removeCustom: (index: number) => void;
+  reset: () => void; // 清空该天所有自定义改动
 };
 
 /** "07:30"/"7:30" → 分钟；非时间文本返回 NaN */
@@ -339,7 +371,7 @@ function SharedMealCard({
   );
 }
 
-// 自定义事项行（自己加的带时间的事；勾选状态按当天日期保存）
+// 自定义事项行（自己加的带时间的事；勾选状态按当天日期保存）。每条右侧直接可改/删，无需先进入编辑模式
 function CustomTaskRow({
   c,
   index,
@@ -351,12 +383,14 @@ function CustomTaskRow({
   handle: WeekHandle;
   check?: CheckCtx;
 }) {
+  const [edit, setEdit] = useState(false);
   const checked = check ? check.get(`custom:${c.id ?? index}`) : false;
-  if (handle.editing) {
-    const inputCls =
-      "min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-950/70 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-emerald-600";
+  const inputCls =
+    "min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-950/70 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-emerald-600";
+
+  if (edit) {
     return (
-      <div className="flex items-start gap-2 py-1">
+      <div className="flex flex-wrap items-center gap-2 py-1">
         <input
           value={c.time}
           onChange={(e) => handle.updateCustom(index, { time: e.target.value })}
@@ -378,12 +412,18 @@ function CustomTaskRow({
         >
           ✕
         </button>
+        <button
+          onClick={() => setEdit(false)}
+          className="shrink-0 rounded-md bg-emerald-600 px-2 py-1 text-[10px] text-white"
+        >
+          完成
+        </button>
       </div>
     );
   }
   return (
-    <div className="flex gap-3">
-      <div className="flex w-14 shrink-0 justify-end pt-0.5">
+    <div className="flex items-center gap-2">
+      <div className="w-14 shrink-0 text-right">
         <span className={`text-[11px] font-semibold tabular-nums ${checked ? "text-emerald-400" : "text-zinc-300"}`}>
           {c.time}
         </span>
@@ -394,6 +434,101 @@ function CustomTaskRow({
           {c.note ? ` — ${c.note}` : ""}
         </CheckRow>
       </div>
+      <button
+        onClick={() => setEdit(true)}
+        aria-label="改这条事项"
+        className="shrink-0 px-1 text-[11px] text-zinc-600 hover:text-emerald-400"
+      >
+        ✎
+      </button>
+      <button
+        onClick={() => handle.removeCustom(index)}
+        aria-label="删除这条事项"
+        className="shrink-0 px-1 text-[11px] text-zinc-600 hover:text-red-400"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+// 时间线底部"直接加一件事"的小表单（无需进入编辑模式）
+function TaskAdder({ onAdd, placeholder }: { onAdd: (time: string, title: string) => void; placeholder?: string }) {
+  const [open, setOpen] = useState(false);
+  const [time, setTime] = useState("07:00");
+  const [title, setTitle] = useState("");
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full rounded-xl border border-dashed border-zinc-700 py-2 text-xs text-zinc-400 transition-colors hover:border-emerald-600 hover:text-emerald-300"
+      >
+        ＋ 给这天加一件固定的事
+      </button>
+    );
+  }
+  const add = () => {
+    const t = title.trim();
+    if (!t) return;
+    onAdd(time.trim() || "07:00", t);
+    setTitle("");
+    setOpen(false);
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-2">
+      <input
+        value={time}
+        onChange={(e) => setTime(e.target.value)}
+        aria-label="时间"
+        placeholder="时间"
+        className="w-16 rounded-md border border-zinc-700 bg-zinc-950 px-1.5 py-1.5 text-center text-xs text-emerald-300 outline-none focus:border-emerald-500"
+      />
+      <input
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && add()}
+        aria-label="要做什么"
+        placeholder={placeholder ?? "例如：14:30 背单词"}
+        autoFocus
+        className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-emerald-500"
+      />
+      <button onClick={add} className="shrink-0 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white">
+        添加
+      </button>
+      <button onClick={() => setOpen(false)} className="shrink-0 px-1 text-[11px] text-zinc-500">
+        取消
+      </button>
+    </div>
+  );
+}
+
+// 时间线尾部：直接加一件事 + 已删除默认项恢复 + 重置该天
+function DayTail({ week }: { week: WeekHandle }) {
+  return (
+    <div className="mt-3 space-y-2">
+      <TaskAdder onAdd={(t, ti) => week.addCustom({ time: t, title: ti })} />
+      {week.hiddenKeys.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] text-zinc-500">已删除的默认项：</span>
+          {week.hiddenKeys.map((k) => (
+            <button
+              key={k}
+              onClick={() => week.unhide(k)}
+              className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-400 transition-colors hover:border-emerald-600 hover:text-emerald-300"
+            >
+              ↺ {NODE_LABELS[k] ?? k}
+            </button>
+          ))}
+        </div>
+      )}
+      <button
+        onClick={() => {
+          if (window.confirm("把这一天恢复成默认模板？会清掉该天所有自定义改动。")) week.reset();
+        }}
+        className="w-full text-center text-[10px] text-zinc-600 underline-offset-2 hover:text-zinc-400 hover:underline"
+      >
+        ↺ 恢复这一天的默认模板（清空自定义）
+      </button>
     </div>
   );
 }
@@ -565,6 +700,7 @@ function TrainingDay({
 }) {
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState(false);
+  const [openKey, setOpenKey] = useState<string | null>(null);
 
   async function toggleDone() {
     if (saving) return;
@@ -575,7 +711,6 @@ function TrainingDay({
     setSaving(false);
   }
 
-  const breakfastItems = meals.meals.find((m) => m.name.includes("早餐"))?.items ?? DEFAULT_BREAKFAST;
   const ed = (section: string, fallback: string[]) => (diet ? { section, fallback, ctx: diet } : undefined);
 
   // 时间线 = 默认节点（可改时间/删除）+ 自定义事项，统一按时间排序
@@ -591,7 +726,8 @@ function TrainingDay({
         <TimelineItem
           time={time}
           title={title}
-          editing={week.editing}
+          open={openKey === key}
+          onOpen={() => setOpenKey((k) => (k === key ? null : key))}
           onTime={(t) => week.setTime(key, t)}
           onHide={() => week.hide(key)}
         >
@@ -603,31 +739,18 @@ function TrainingDay({
 
   push("wake", "05:00", 1, "起床", <p className="text-[11px] text-zinc-500">洗漱 + 200ml 水</p>);
 
+  // 早餐和练前吃合并为一餐（练前 30-60 分钟吃），不再分开两张卡
   push(
     "breakfast",
-    "05:10",
-    2,
-    "早餐",
-    <MealCard
-      title="🍳 早餐"
-      items={breakfastItems}
-      check={check ? { ...check, prefix: "breakfast" } : undefined}
-      diet={ed("breakfast", breakfastItems)}
-    />,
-  );
-
-  push(
-    "pre",
     "05:30",
-    3,
-    "练前吃（练前 30-60 分钟）",
+    2,
+    "早餐 + 练前吃（练前 30-60 分钟）",
     <MealCard
-      title="🍌 练前吃"
+      title="🍳 早餐 + 练前吃"
       when={meals.preWorkout.when}
-      items={meals.preWorkout.items ?? DEFAULT_PRE}
-      accent
-      check={check ? { ...check, prefix: "pre" } : undefined}
-      diet={ed("pre", meals.preWorkout.items ?? DEFAULT_PRE)}
+      items={diet ? diet.items("premeal", DEFAULT_PREMEAL) : DEFAULT_PREMEAL}
+      check={check ? { ...check, prefix: "premeal" } : undefined}
+      diet={ed("premeal", DEFAULT_PREMEAL)}
     />,
   );
 
@@ -727,9 +850,10 @@ function TrainingDay({
         </div>
         {nodes.length === 0 && (
           <p className="rounded-xl border border-dashed border-zinc-700 p-4 text-center text-xs text-zinc-500">
-            这一天没有安排 —— 点右上角「✎ 编辑安排」自己加
+            这一天没有安排 —— 用下面的「＋」直接加
           </p>
         )}
+        <DayTail week={week} />
       </div>
 
       {/* 完成 / 取消（再点一次可取消，防误触后无法恢复） */}
@@ -755,6 +879,7 @@ function TrainingDay({
 function RestDay({ meals, warmup, stairClimber, check, diet, week }: { meals: MealPlan; warmup: string[]; stairClimber: MealPlan["stairClimber"]; check?: CheckCtx; diet?: DietCtx; week: WeekHandle }) {
   const breakfastItems = meals.meals.find((m) => m.name.includes("早餐"))?.items ?? DEFAULT_BREAKFAST;
   const ed = (section: string, fallback: string[]) => (diet ? { section, fallback, ctx: diet } : undefined);
+  const [openKey, setOpenKey] = useState<string | null>(null);
 
   const nodes: { key: string; min: number; seq: number; el: React.ReactElement }[] = [];
   const push = (key: string, defTime: string, seq: number, title: string, content: React.ReactNode) => {
@@ -768,7 +893,8 @@ function RestDay({ meals, warmup, stairClimber, check, diet, week }: { meals: Me
         <TimelineItem
           time={time}
           title={title}
-          editing={week.editing}
+          open={openKey === key}
+          onOpen={() => setOpenKey((k) => (k === key ? null : key))}
           onTime={(t) => week.setTime(key, t)}
           onHide={() => week.hide(key)}
         >
@@ -854,9 +980,10 @@ function RestDay({ meals, warmup, stairClimber, check, diet, week }: { meals: Me
         </div>
         {nodes.length === 0 && (
           <p className="rounded-xl border border-dashed border-zinc-700 p-4 text-center text-xs text-zinc-500">
-            这一天没有安排 —— 点右上角「✎ 编辑安排」自己加
+            这一天没有安排 —— 用下面的「＋」直接加
           </p>
         )}
+        <DayTail week={week} />
       </div>
     </div>
   );
@@ -1247,9 +1374,6 @@ export default function PlanView({
   };
 
   // ---------- 周计划：当前星期几的节点编辑/自定义（自动保存） ----------
-  const [editingDay, setEditingDay] = useState(false);
-  const [newTaskTime, setNewTaskTime] = useState("07:00");
-  const [newTaskTitle, setNewTaskTitle] = useState("");
   // 用 {day, doc, ready} 结构：渲染时 day 不匹配就视为空，避免跨星期几闪烁
   const [weekState, setWeekState] = useState<{ day: string; doc: WeekDoc; ready: boolean }>({
     day: "",
@@ -1306,9 +1430,9 @@ export default function PlanView({
     patchDoc((d) => ({ ...d, edits: { ...d.edits, [key]: { ...(d.edits[key] ?? {}), ...patch } } }));
 
   const week: WeekHandle = {
-    editing: editingDay,
     time: (key, def) => weekDoc.edits[key]?.time || def,
     hidden: (key) => !!weekDoc.edits[key]?.hidden,
+    hiddenKeys: Object.keys(weekDoc.edits).filter((k) => weekDoc.edits[k]?.hidden),
     setTime: (key, t) => setEdit(key, { time: t }),
     hide: (key) => setEdit(key, { hidden: true }),
     unhide: (key) => setEdit(key, { hidden: false }),
@@ -1318,9 +1442,8 @@ export default function PlanView({
       patchDoc((d) => ({ ...d, customs: d.customs.map((c, i) => (i === index ? { ...c, ...patch } : c)) })),
     removeCustom: (index) =>
       patchDoc((d) => ({ ...d, customs: d.customs.filter((_, i) => i !== index) })),
+    reset: () => patchDoc(() => ({ edits: {}, customs: [] })),
   };
-
-  const hiddenKeys = Object.keys(weekDoc.edits).filter((k) => weekDoc.edits[k]?.hidden);
 
   // 完成 / 取消打卡（done 标记写 /api/records；再点一次即取消）
   async function setDayDone(next: boolean): Promise<boolean> {
@@ -1455,94 +1578,6 @@ export default function PlanView({
             patchDoc((d) => ({ ...d, customs: [...d.customs, { time: entry.time, title: entry.title }] }))
           }
         />
-      </div>
-
-      {/* 编辑工具条：改时间/删项/加自己的事项（对该星期几长期生效） */}
-      <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {editingDay ? (
-            <>
-              <button
-                onClick={() => setEditingDay(false)}
-                className="rounded-full bg-emerald-600 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
-              >
-                ✓ 完成编辑
-              </button>
-              <button
-                onClick={() => {
-                  if (window.confirm(`把${dayName}恢复成默认模板？会清掉这一天所有自定义。`)) {
-                    patchDoc(() => ({ edits: {}, customs: [] }));
-                    setNewTaskTitle("");
-                  }
-                }}
-                className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:border-red-700 hover:text-red-400"
-              >
-                ↺ 恢复默认
-              </button>
-              <span className="text-[10px] text-zinc-500">点左边时间可直接改 · ✕ 删除 · 改动自动保存</span>
-            </>
-          ) : (
-            <button
-              onClick={() => setEditingDay(true)}
-              className="rounded-full border border-emerald-800 bg-emerald-950/40 px-3.5 py-1.5 text-xs font-medium text-emerald-300 transition-colors hover:border-emerald-500"
-            >
-              ✎ 编辑{dayName}的安排
-            </button>
-          )}
-        </div>
-
-        {editingDay && (
-          <div className="mt-2.5 flex items-center gap-2">
-            <input
-              value={newTaskTime}
-              onChange={(e) => setNewTaskTime(e.target.value)}
-              aria-label="时间"
-              placeholder="时间"
-              className="w-16 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-center text-xs text-emerald-300 outline-none focus:border-emerald-500"
-            />
-            <input
-              value={newTaskTitle}
-              onChange={(e) => setNewTaskTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  const t = newTaskTitle.trim();
-                  if (!t) return;
-                  week.addCustom({ time: newTaskTime.trim() || "07:00", title: t });
-                  setNewTaskTitle("");
-                }
-              }}
-              aria-label="要做什么"
-              placeholder={`${dayName}固定要做的事？例如：15:00 背单词 50 个`}
-              className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-emerald-500"
-            />
-            <button
-              onClick={() => {
-                const t = newTaskTitle.trim();
-                if (!t) return;
-                week.addCustom({ time: newTaskTime.trim() || "07:00", title: t });
-                setNewTaskTitle("");
-              }}
-              className="shrink-0 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
-            >
-              ＋ 加入
-            </button>
-          </div>
-        )}
-
-        {editingDay && hiddenKeys.length > 0 && (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] text-zinc-500">已删除的默认项（点一下恢复）：</span>
-            {hiddenKeys.map((k) => (
-              <button
-                key={k}
-                onClick={() => week.unhide(k)}
-                className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-400 transition-colors hover:border-emerald-600 hover:text-emerald-300"
-              >
-                ↺ {NODE_LABELS[k] ?? k}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* 当日内容 */}
