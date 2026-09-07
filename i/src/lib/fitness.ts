@@ -386,12 +386,15 @@ function setCount(ex: Exercise): number {
 // ---------- 部位日模板（兜底推荐用） ----------
 type DayType = { name: string; mix: { 蹲: number; 推: number; 拉: number; 髋: number } };
 
+// 个人专属日模板：某周几 + 部位命中时，完全用这套内容（健身房动作）
+type PersonalDayTpl = {
+  warmup: string[];
+  exercises: Pick<Exercise, "name" | "muscle" | "cue" | "setsReps">[];
+};
+
 // 周一·胸日·专属流程（用户原话整理：热身+激活 → 正式组从上到下）
 // 保留你原话的全部动作细节，未删减
-const MONDAY_CHEST: {
-  warmup: string[];
-  exercises: Pick<Exercise, "name" | "muscle" | "cue">[];
-} = {
+const MONDAY_CHEST: PersonalDayTpl = {
   warmup: [
     "泡沫轴热身·①：胸部正上方一点，用力压住，吸气维持，扩张胸部，激活胸廓感受，放松胸肌颈膜，减少肩膀压力",
     "泡沫轴热身·②：手抵住泡沫轴，菱形肌拉伸的感觉，前锯肌也会发力",
@@ -401,41 +404,92 @@ const MONDAY_CHEST: {
     {
       name: "上斜固定夹胸器 / 仰卧龙门架夹胸（上胸激活）",
       muscle: "上胸",
+      setsReps: "2 × 力竭激活 + 4 × 12-16",
       cue:
         "手要握的偏上一点，肋骨贴紧凳子，要很精准的找到它，就是上面，4 组正式组 × 12-16（先用激活组找到锁骨下上胸肌纤维发力的感觉）",
     },
     {
       name: "上斜哑铃卧推",
       muscle: "上胸 · 前束",
+      setsReps: "4 × 12-16",
       cue:
         "肋骨紧紧贴住凳子，收住肋骨，腰紧紧地贴住凳子，不要吸太多气，上去的时候手腕往里扣，不用推到中间，反正会松，往下放的多，大概快直了就结束，全握，引导胸大肌上束发力，要把力收到胸肌上，向下的时候不要单纯的向下，反正力会到肩部，向外一点，向远端延长，胸肌拉伸感，不要抬头，4 组正式组 × 12-16",
     },
     {
       name: "下斜双杠臂屈伸（下胸）",
       muscle: "下胸 · 三头",
+      setsReps: "4 × 12-16",
       cue:
         "自重、辅助都行，首先撑住，把身体含起来，然后下去，不是放腿下去，而是开肘，要感觉到下胸收的很紧，不要弯腰，而是肩胛骨，中缝没有肉，因为收缩不够，募集更多的肌纤维，可以用手扣一扣中缝，4 组 × 12-16（先轻重量，感受发力，再加重量）",
     },
     {
       name: "平夹（Pec Deck / 龙门架中位夹胸）",
       muscle: "中胸（中缝）",
+      setsReps: "4 × 12-16",
       cue:
         "练整体，深吸一口气，不要顶肋，平角度，往后放，不要开肋顶腰，向内收要收紧，肘伸直，中缝发力更好，可以单手去做，感受到挤压的感觉",
     },
   ],
 };
 
-// 通用热身（各训练日默认；周一胸日专属热身见 MONDAY_CHEST.warmup）
+// 周二·背日·专属流程（用户原话整理：肩胛热身 → 下拉/划船/直臂下压）
+const TUESDAY_BACK: PersonalDayTpl = {
+  warmup: [
+    "跪姿肘屈伸：手心相对，重心向后，这时候背部已经在发力了；吸气，肩胛骨撑高，前锯肌激活，维持住，再去做肘屈、伸肘，要保证背部持续张力——前锯肌、内肩肌、背部都在发力，主体是肩胛骨（2-3 组）",
+    "凳子肘屈肘伸：手放在凳子上，往后下再起来，跪姿也可以（2-3 组）",
+    "（这个动作本身练三头，能改善肩胛骨、肱骨前移、肩膀弹响疼痛）脚部可以勾住前面一个东西，微微向后仰，大臂往里收，手不用完全起来，注意力放在肩胛骨的位置，弱化三头发力、增强肩胛骨发力（2-3 组）",
+  ],
+  exercises: [
+    {
+      name: "反手高位下拉",
+      muscle: "背阔 · 二头",
+      setsReps: "5-6 组",
+      cue:
+        "反手、握距与肩同宽、半握，靠尺侧发力。深吸一口气，背预先发力，上肢微微前倾，肘往里收，不要耸肩，否则背就松掉了；向上放的时候收紧腹肌，不要后仰，否则下背部练不到；下拉的时候挺胸收腹。",
+    },
+    {
+      name: "坐姿绳索划船（对握窄握）",
+      muscle: "背阔下缘 · 中背",
+      setsReps: "4-5 组 · 可递减",
+      cue:
+        "对握窄握。脚用力去蹬，让大腿后侧保持发力，维持骨盆和腰椎的稳定，下面不能松，否则腰会发力；背阔肌预先发力，拉过来一部分，再深吸一口气，维持住这口气，下背就发力了；往腹部拉、微微前倾，不要过度向后拉（防止背阔肌松掉），不要后仰和向上提，头要低下巴，也不要放太多。这个动作超级重要，好好打磨这个重量，可以做递减，防止动作变形。",
+    },
+    {
+      name: "中距离对握高位下拉",
+      muscle: "背阔 · 大圆肌",
+      setsReps: "4 组",
+      cue:
+        "中距离对握。找肩胛骨上回旋的拉伸感，一定要找到大圆肌的拉伸感；握住往下一点，深吸一口气，重心微微前倾，腹肌绷紧，拉到嘴的位置，不要后仰，要收腹，一定找到肩胛骨上回旋的拉伸感。",
+    },
+    {
+      name: "中距离对握开肘坐姿划船",
+      muscle: "中背 · 上背",
+      setsReps: "4 组",
+      cue:
+        "练中背部和上背部，以肩胛后缩为主。重心维持在中立位，向两侧做肩胛后缩；放的时候不要放到底、不要伸直手臂；先收紧核心，固定住头和腰的位置，挺胸，肩胛后缩到位，不要后仰。",
+    },
+    {
+      name: "直臂下压",
+      muscle: "背阔下缘 · 三头长头",
+      setsReps: "4 组",
+      cue:
+        "上下背部同时都能练到。俯身、屈髋伸髋，直杆弯杆都行，长的杆握在最远端、半握、手腕扣起来；做这个动作之前，背部需要预先发力，防止肩酸；先做好姿势，深吸一口气，维持住这口气，不要含胸，保证中立位；下压，收紧腹肌，不要抬臀，背部收紧，收到最紧。",
+    },
+  ],
+};
+
+// 通用热身（各训练日默认；专属模板日用自己的热身）
 const GENERIC_WARMUP: string[] = [
   "5 分钟提升心率：快走 / 划船机 / 开合跳（微喘但不累）",
   "当天要练的关节动态活动：肩绕环、髋绕环、徒手深蹲各 10 次",
   "第一个动作做 2 组递增组：空杆 × 12 → 50% 重量 × 8，然后进正式组",
 ];
 
-// 某天 / 部位 是否触发「周一胸日专属流程」
-function isMondayChestDay(day: string, dayType: string): boolean {
-  // 周一 + 任意包含"胸"的部位日类型
-  return day === "周一" && dayType.includes("胸");
+// 命中某天的个人专属模板（周一胸日 / 周二背日），未命中返回 null
+function specialTemplate(day: string, dayType: string): PersonalDayTpl | null {
+  if (day === "周一" && dayType.includes("胸")) return MONDAY_CHEST;
+  if (day === "周二" && dayType.includes("背")) return TUESDAY_BACK;
+  return null;
 }
 
 const PART_TPL: Record<string, DayType> = {
@@ -666,16 +720,14 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
   const { types, custom: autoCustom } = dayTypes(f.weekdays.length, f.parts);
   const customPicks = !!f.userPicks && Object.keys(f.userPicks).some((p) => (f.userPicks?.[p] ?? []).length > 0);
 
-  // ---------- 集合：周一胸日专属（多天情况下只在周一触发一次） ----------
-  // 真正约束在 isMondayChestDay（周一 + 当日类型含"胸"）；此开关只是确认周一在训练日里
-  const mondayChestActive = f.weekdays.includes("周一");
-
   const schedule: DayPlan[] = ALL_DAYS.map((d) => {
     const idx = f.weekdays.indexOf(d);
     if (idx === -1) {
       return { day: d, type: "休息", place: "—", slot: "—", minutes: 0, exercises: [], warmup: [] };
     }
     const t = types[idx % types.length];
+    // 命中个人专属模板日（周一胸日 / 周二背日）
+    const tpl = specialTemplate(d, t.name);
 
     // 决定场地
     const big = t.mix["蹲"] >= 2 || t.mix["推"] >= 3 || t.mix["髋"] >= 3;
@@ -694,21 +746,21 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
       place = "户外";
       moves = gymPool;
     }
+    // 专属模板动作都在健身房完成
+    if (tpl) place = "健身房";
     const slot = f.daySlots?.[d] ?? "暂定";
 
-    // 动作选择：优先 userPicks > 周一胸日专属（仅当周一胸日且没自选）> 自动按 mix 排
-    const mondaySpecial = isMondayChestDay(d, t.name) && mondayChestActive;
+    // 动作选择：优先 userPicks > 个人专属模板（仅当该日命中且没自选）> 自动按 mix 排
     let ex: Exercise[];
     const pickMoves = picksFor(f.userPicks, inferPartFromType(t.name));
     if (pickMoves.length > 0) {
       ex = toEx(pickMoves, exp, kg, gender);
-    } else if (mondaySpecial) {
-      // 周一胸日专属流程：你的原话整理
-      ex = MONDAY_CHEST.exercises.map((e, i) => ({
+    } else if (tpl) {
+      ex = tpl.exercises.map((e) => ({
         name: e.name,
         muscle: e.muscle,
         startWeight: startWeightByName(e.name, kg, gender, exp),
-        setsReps: i === 0 ? "2 × 力竭激活 + 4 × 12-16" : "4 × 12-16",
+        setsReps: e.setsReps,
         rest: "90 秒",
         cue: e.cue,
       }));
@@ -720,8 +772,8 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
         ...toEx(pick(moves, "髋", t.mix["髋"]), exp, kg, gender),
       ];
     }
-    // 核心收尾（userPicks 包含核心则不再追加；周一胸日专属流已包含激活流程，不追加平板）
-    if (!ex.some((e) => isCoreMove(e.name)) && !mondaySpecial) {
+    // 核心收尾（userPicks 含核心则不追加；专属模板日不追加平板）
+    if (!ex.some((e) => isCoreMove(e.name)) && !tpl) {
       ex.push({
         name: "平板支撑",
         muscle: "核心",
@@ -733,7 +785,7 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
     }
 
     const minutes = 10 + ex.reduce((s, e) => s + setCount(e), 0) * 2.5;
-    const dayWarmup = mondaySpecial ? MONDAY_CHEST.warmup : GENERIC_WARMUP;
+    const dayWarmup = tpl ? tpl.warmup : GENERIC_WARMUP;
 
     return {
       day: d,

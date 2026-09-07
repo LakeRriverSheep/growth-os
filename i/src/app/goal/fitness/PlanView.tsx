@@ -36,6 +36,12 @@ type CheckCtx = {
 // 兜底：无上下文时的空实现（不影响渲染）
 const NOOP_CHECK: CheckCtx = { get: () => false, toggle: () => {} };
 
+// 饮食清单（每条可勾选 + 可增删改）读写上下文，由 PlanView 注入，落库 diet_overrides
+type DietCtx = {
+  items: (section: string, fallback: string[]) => string[];
+  save: (section: string, items: string[]) => void;
+};
+
 // 可勾选的一行：热身步骤 / 餐内每一条
 function CheckRow({ item, ctx, num, children }: { item: string; ctx: CheckCtx; num?: number; children: React.ReactNode }) {
   const checked = ctx.get(item);
@@ -60,41 +66,108 @@ function CheckRow({ item, ctx, num, children }: { item: string; ctx: CheckCtx; n
   );
 }
 
+const DEFAULT_BREAKFAST = ["鸡蛋 2 个 + 燕麦 50g", "牛奶 250ml", "香蕉或苹果 1 个"];
+const DEFAULT_LUNCH = ["鸡胸/牛肉 150g", "米饭 1-1.5 碗", "蔬菜不限量"];
+const DEFAULT_SNACK = ["希腊酸奶 1 杯 或 鸡蛋白 2 个", "坚果一小把（10g）"];
+const DEFAULT_DINNER = ["鸡胸/鱼虾 150g", "红薯 150g 或 米饭半碗", "蔬菜不限量"];
+const DEFAULT_PRE = ["香蕉 1 根 + 全麦面包 1 片（快碳供能）", "或燕麦 40g 冲泡 + 鸡蛋 1 个", "别吃撑，七成饱，练时胃不能胀"];
+const DEFAULT_POST = ["蛋白质 30g+：鸡胸 150g 或 鸡蛋 3 个 + 牛奶 250ml（或蛋白粉 1 勺）", "碳水 40-60g：米饭 1 碗 / 红薯 200g", "这餐吃不好，今天训练效果打 6 折"];
+
 function MealCard({
   title,
   when,
   items,
   accent,
   check,
+  diet,
 }: {
   title: string;
   when?: string;
   items: string[];
   accent?: boolean;
-  /** 传入后该餐的每一条都可勾选，prefix 需在当天内唯一（如 lunch/snack/dinner） */
+  /** 传入后该餐的每一条都可勾选，prefix 需在当天内唯一 */
   check?: CheckCtx & { prefix: string };
+  /** 传入后支持“增删改”每条：section 为该餐唯一键 */
+  diet?: { section: string; fallback: string[]; ctx: DietCtx };
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string[]>(items);
+  const resolved = diet ? diet.ctx.items(diet.section, diet.fallback) : items;
+  const editable = !!diet;
+
+  function startEdit() {
+    setDraft(resolved);
+    setEditing(true);
+  }
+  function saveEdit() {
+    const next = draft.map((s) => s.trim()).filter(Boolean);
+    setEditing(false);
+    if (diet && JSON.stringify(next) !== JSON.stringify(resolved)) diet.ctx.save(diet.section, next);
+  }
+  const inputCls =
+    "w-full flex-1 rounded-md border border-zinc-800 bg-zinc-950/70 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-emerald-600";
+
   return (
     <div className={`rounded-2xl border p-3.5 ${accent ? "border-emerald-700/50 bg-emerald-950/20" : "border-zinc-800 bg-zinc-900/50"}`}>
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-2">
         <span className={`text-xs font-semibold ${accent ? "text-emerald-400" : "text-zinc-200"}`}>{title}</span>
-        {when && <span className="text-[10px] text-zinc-500">{when}</span>}
+        {editing ? (
+          <span className="flex shrink-0 items-center gap-2 text-[10px]">
+            <button onClick={saveEdit} className="rounded-full bg-emerald-600 px-2 py-0.5 text-white">
+              完成
+            </button>
+            <button onClick={() => setEditing(false)} className="text-zinc-500 hover:text-zinc-300">
+              取消
+            </button>
+          </span>
+        ) : (
+          <>
+            {when && <span className="text-[10px] text-zinc-500">{when}</span>}
+            {editable && (
+              <button onClick={startEdit} className="shrink-0 text-[10px] text-zinc-500 hover:text-emerald-400">
+                ✎ 改清单
+              </button>
+            )}
+          </>
+        )}
       </div>
-      <ul className="mt-2 space-y-1.5">
-        {items.map((it, i) =>
-          check ? (
-            <li key={i}>
-              <CheckRow item={`${check.prefix}:${i}`} ctx={check}>
+
+      {editing ? (
+        <div className="mt-2 space-y-1.5">
+          {draft.map((it, i) => (
+            <div key={i} className="flex items-center gap-1.5">
+              <input
+                value={it}
+                onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? e.target.value : x)))}
+                className={inputCls}
+              />
+              <button
+                onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}
+                aria-label="删除这一条"
+                className="shrink-0 rounded-md border border-zinc-800 px-1.5 py-1 text-[10px] text-red-400/90 hover:border-red-700"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={() => setDraft((d) => [...d, ""])}
+            className="w-full rounded-md border border-dashed border-zinc-700 py-1 text-[11px] text-zinc-400 hover:border-emerald-600 hover:text-emerald-400"
+          >
+            ＋ 添加一条
+          </button>
+        </div>
+      ) : (
+        <ul className="mt-2 space-y-1.5">
+          {resolved.map((it, i) => (
+            <li key={`${it}-${i}`}>
+              <CheckRow item={`${check?.prefix ?? "meal"}:${it}`} ctx={check ?? NOOP_CHECK}>
                 {it}
               </CheckRow>
             </li>
-          ) : (
-            <li key={i} className="text-xs leading-5 text-zinc-400">
-              · {it}
-            </li>
-          ),
-        )}
-      </ul>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -165,29 +238,34 @@ function SharedMealClock({
   stairClimber,
   restVariant,
   check,
+  diet,
 }: {
   meals: MealPlan;
   stairClimber: MealPlan["stairClimber"];
   restVariant?: boolean;
   check?: CheckCtx;
+  diet?: DietCtx;
 }) {
   const mealsItems = (key: string, fallback: string[]) =>
     meals.meals.find((m) => m.name.includes(key))?.items ?? fallback;
+  const ed = (section: string, fallback: string[]) => (diet ? { section, fallback, ctx: diet } : undefined);
   return (
     <>
       <TimelineItem time={DAY_TIMES.lunch} title="中餐">
         <MealCard
           title="🍚 中餐"
-          items={mealsItems("午餐", ["鸡胸/牛肉 150g", "米饭 1-1.5 碗", "蔬菜不限量"])}
+          items={mealsItems("午餐", DEFAULT_LUNCH)}
           check={check ? { ...check, prefix: "lunch" } : undefined}
+          diet={ed("lunch", mealsItems("午餐", DEFAULT_LUNCH))}
         />
       </TimelineItem>
 
       <TimelineItem time={DAY_TIMES.snack} title="下午加餐">
         <MealCard
           title="🥛 下午加餐"
-          items={mealsItems("加餐", ["希腊酸奶 1 杯 或 鸡蛋白 2 个", "坚果一小把（10g）"])}
+          items={mealsItems("加餐", DEFAULT_SNACK)}
           check={check ? { ...check, prefix: "snack" } : undefined}
+          diet={ed("snack", mealsItems("加餐", DEFAULT_SNACK))}
         />
       </TimelineItem>
 
@@ -198,8 +276,9 @@ function SharedMealClock({
       <TimelineItem time={DAY_TIMES.dinner} title="晚餐">
         <MealCard
           title="🥗 晚餐"
-          items={mealsItems("晚餐", ["鸡胸/鱼虾 150g", "红薯 150g 或 米饭半碗", "蔬菜不限量"])}
+          items={mealsItems("晚餐", DEFAULT_DINNER)}
           check={check ? { ...check, prefix: "dinner" } : undefined}
+          diet={ed("dinner", mealsItems("晚餐", DEFAULT_DINNER))}
         />
       </TimelineItem>
     </>
@@ -356,6 +435,7 @@ function TrainingDay({
   dateIso,
   done,
   check,
+  diet,
   onSetDone,
 }: {
   day: DayPlan;
@@ -365,6 +445,7 @@ function TrainingDay({
   dateIso: string;
   done: boolean;
   check?: CheckCtx;
+  diet?: DietCtx;
   onSetDone: (next: boolean) => Promise<boolean>;
 }) {
   const [saving, setSaving] = useState(false);
@@ -378,6 +459,9 @@ function TrainingDay({
     if (!ok) setSaveErr(true);
     setSaving(false);
   }
+
+  const breakfastItems = meals.meals.find((m) => m.name.includes("早餐"))?.items ?? DEFAULT_BREAKFAST;
+  const ed = (section: string, fallback: string[]) => (diet ? { section, fallback, ctx: diet } : undefined);
 
   return (
     <div className="space-y-5">
@@ -407,8 +491,9 @@ function TrainingDay({
         <TimelineItem time="05:10" title="早餐">
           <MealCard
             title="🍳 早餐"
-            items={["鸡蛋 2 个 + 燕麦 50g", "牛奶 250ml", "香蕉或苹果 1 个"]}
+            items={breakfastItems}
             check={check ? { ...check, prefix: "breakfast" } : undefined}
+            diet={ed("breakfast", breakfastItems)}
           />
         </TimelineItem>
 
@@ -416,9 +501,10 @@ function TrainingDay({
           <MealCard
             title="🍌 练前吃"
             when={meals.preWorkout.when}
-            items={meals.preWorkout.items}
+            items={meals.preWorkout.items ?? DEFAULT_PRE}
             accent
             check={check ? { ...check, prefix: "pre" } : undefined}
+            diet={ed("pre", meals.preWorkout.items ?? DEFAULT_PRE)}
           />
         </TimelineItem>
 
@@ -447,13 +533,14 @@ function TrainingDay({
           <MealCard
             title="🍗 练后吃"
             when={meals.postWorkout.when}
-            items={meals.postWorkout.items}
+            items={meals.postWorkout.items ?? DEFAULT_POST}
             accent
             check={check ? { ...check, prefix: "post" } : undefined}
+            diet={ed("post", meals.postWorkout.items ?? DEFAULT_POST)}
           />
         </TimelineItem>
 
-        <SharedMealClock meals={meals} stairClimber={stairClimber} check={check} />
+        <SharedMealClock meals={meals} stairClimber={stairClimber} check={check} diet={diet} />
       </div>
 
       {/* 完成 / 取消（再点一次可取消，防误触后无法恢复） */}
@@ -476,7 +563,9 @@ function TrainingDay({
   );
 }
 
-function RestDay({ meals, warmup, stairClimber, check }: { meals: MealPlan; warmup: string[]; stairClimber: MealPlan["stairClimber"]; check?: CheckCtx }) {
+function RestDay({ meals, warmup, stairClimber, check, diet }: { meals: MealPlan; warmup: string[]; stairClimber: MealPlan["stairClimber"]; check?: CheckCtx; diet?: DietCtx }) {
+  const breakfastItems = meals.meals.find((m) => m.name.includes("早餐"))?.items ?? DEFAULT_BREAKFAST;
+  const ed = (section: string, fallback: string[]) => (diet ? { section, fallback, ctx: diet } : undefined);
   return (
     <div className="space-y-5">
       {/* 休息日可选项：走路/拉伸 */}
@@ -510,12 +599,13 @@ function RestDay({ meals, warmup, stairClimber, check }: { meals: MealPlan; warm
         <TimelineItem time="08:00" title="起床 + 早餐（睡到自然醒）">
           <MealCard
             title="🍳 早餐"
-            items={meals.meals.find((m) => m.name.includes("早餐"))?.items ?? ["鸡蛋 2 个 + 燕麦 50g", "牛奶 250ml", "香蕉或苹果 1 个"]}
+            items={breakfastItems}
             check={check ? { ...check, prefix: "breakfast" } : undefined}
+            diet={ed("breakfast", breakfastItems)}
           />
         </TimelineItem>
 
-        <SharedMealClock meals={meals} stairClimber={stairClimber} restVariant check={check} />
+        <SharedMealClock meals={meals} stairClimber={stairClimber} restVariant check={check} diet={diet} />
       </div>
     </div>
   );
@@ -625,6 +715,41 @@ export default function PlanView({
         .catch(() =>
           setChecksState((s) => (s.iso === iso ? { ...s, map: { ...s.map, [item]: !next } } : s)),
         );
+    },
+  };
+
+  // 饮食清单覆盖：每条可增删改，独立存 diet_overrides（重生成计划不会被覆盖）
+  const [dietSections, setDietSections] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/plan/diet?goalId=fitness")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { sections?: Record<string, string[]> } | null) => {
+        if (alive && d?.sections && typeof d.sections === "object") setDietSections(d.sections);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const dietCtx: DietCtx = {
+    items: (section, fallback) => {
+      const s = dietSections[section];
+      return s !== undefined ? s : fallback;
+    },
+    save: (section, items) => {
+      const prev = dietSections;
+      const next = { ...prev, [section]: items };
+      setDietSections(next);
+      fetch("/api/plan/diet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goalId: "fitness", sections: next }),
+      })
+        .then((r) => {
+          if (!r.ok) throw new Error("save failed");
+        })
+        .catch(() => setDietSections(prev)); // 失败回滚
     },
   };
 
@@ -756,7 +881,7 @@ export default function PlanView({
       {/* 当日内容 */}
       <div className="mt-5">
         {dayPlan.type === "休息" ? (
-          <RestDay meals={safeMeals} warmup={warmup} stairClimber={safeMeals.stairClimber} check={checkCtx} />
+          <RestDay meals={safeMeals} warmup={warmup} stairClimber={safeMeals.stairClimber} check={checkCtx} diet={dietCtx} />
         ) : (
           <TrainingDay
             day={dayPlan}
@@ -766,6 +891,7 @@ export default function PlanView({
             dateIso={iso}
             done={done}
             check={checkCtx}
+            diet={dietCtx}
             onSetDone={setDayDone}
           />
         )}

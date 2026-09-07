@@ -279,6 +279,21 @@ test("userPicks 部分部位有自选 → 该部位用自选，其他部位用�
   }
 });
 
+test("周二背日：无自选时启用专属 5 动作模板 + 专属热身（健身房）", () => {
+  const p = generateFitnessPlan(
+    baseInput({ weekdays: ["周一", "周二", "周三"], parts: ["胸", "背", "肩"], daySlots: { 周一: "清晨", 周二: "清晨", 周三: "清晨" } }),
+  );
+  const tue = p.schedule[1];
+  assert.equal(tue.day, "周二");
+  assert.equal(tue.type, "背日");
+  assert.equal(tue.place, "健身房");
+  assert.equal(tue.exercises.length, 5);
+  assert.equal(tue.exercises[0].name, "反手高位下拉");
+  assert.ok(tue.exercises[0].setsReps.includes("5-6"));
+  assert.equal(tue.exercises[4].name, "直臂下压");
+  assert.ok(tue.warmup[0].includes("跪姿"), "周二热身应为肩胛激活专属版");
+});
+
 test("userPicks 为空/完全没传 → 走引擎兜底（与 v3 行为兼容）", () => {
   const a = generateFitnessPlan(baseInput());
   const b = generateFitnessPlan(baseInput({ userPicks: undefined }));

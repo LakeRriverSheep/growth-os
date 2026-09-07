@@ -44,6 +44,13 @@ const SCHEMA = `
     updated_at TEXT DEFAULT (datetime('now', 'localtime')),
     PRIMARY KEY (date, item)
   );
+
+  -- 可编辑饮食清单：餐次条目增删改后的覆盖（独立于计划 JSON，避免重新生成计划时被覆盖）
+  CREATE TABLE IF NOT EXISTS diet_overrides (
+    goal_id TEXT PRIMARY KEY,
+    sections TEXT DEFAULT '{}', -- { breakfast: string[], lunch: [], snack: [], dinner: [], pre: [], post: [] }
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
 `;
 
 type SqlValue = string | number | null;
