@@ -51,6 +51,34 @@ const SCHEMA = `
     sections TEXT DEFAULT '{}', -- { breakfast: string[], lunch: [], snack: [], dinner: [], pre: [], post: [] }
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
   );
+
+  -- 每周（按星期几）时间线的节点编辑：改时间 / 隐藏默认节点
+  CREATE TABLE IF NOT EXISTS week_node_edits (
+    weekday TEXT NOT NULL, -- '周一'..'周日'
+    node TEXT NOT NULL,    -- 节点 key，如 wake/breakfast/pre/workout/post/lunch/snack/stair/dinner
+    time TEXT DEFAULT '',
+    hidden INTEGER DEFAULT 0,
+    updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+    PRIMARY KEY (weekday, node)
+  );
+
+  -- 每周（按星期几）自定义的时间事项（自己加的、不在默认模板里）
+  CREATE TABLE IF NOT EXISTS week_custom (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    weekday TEXT NOT NULL,
+    time TEXT DEFAULT '',
+    title TEXT DEFAULT '',
+    note TEXT DEFAULT '',
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
+
+  -- 全局"随手待办"：没有固定时间、不分日期的事项
+  CREATE TABLE IF NOT EXISTS inbox (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    text TEXT NOT NULL,
+    checked INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
 `;
 
 type SqlValue = string | number | null;

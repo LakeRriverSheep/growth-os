@@ -73,6 +73,19 @@ const DEFAULT_DINNER = ["鸡胸/鱼虾 150g", "红薯 150g 或 米饭半碗", "�
 const DEFAULT_PRE = ["香蕉 1 根 + 全麦面包 1 片（快碳供能）", "或燕麦 40g 冲泡 + 鸡蛋 1 个", "别吃撑，七成饱，练时胃不能胀"];
 const DEFAULT_POST = ["蛋白质 30g+：鸡胸 150g 或 鸡蛋 3 个 + 牛奶 250ml（或蛋白粉 1 勺）", "碳水 40-60g：米饭 1 碗 / 红薯 200g", "这餐吃不好，今天训练效果打 6 折"];
 
+// 默认时间线节点在「删除后恢复」时的展示名
+const NODE_LABELS: Record<string, string> = {
+  wake: "起床",
+  breakfast: "早餐",
+  pre: "练前吃",
+  workout: "训练",
+  post: "练后吃",
+  lunch: "中餐",
+  snack: "下午加餐",
+  stair: "爬楼机",
+  dinner: "晚餐",
+};
+
 function MealCard({
   title,
   when,
@@ -172,14 +185,51 @@ function MealCard({
   );
 }
 
-function TimelineItem({ time, title, children, accent }: { time: string; title: string; children: React.ReactNode; accent?: boolean }) {
+function TimelineItem({
+  time,
+  title,
+  children,
+  accent,
+  editing,
+  onTime,
+  onHide,
+}: {
+  time: string;
+  title: string;
+  children: React.ReactNode;
+  accent?: boolean;
+  /** 编辑模式：时间列变成输入框，标题右侧出现隐藏按钮 */
+  editing?: boolean;
+  onTime?: (t: string) => void;
+  onHide?: () => void;
+}) {
   return (
     <div className="flex gap-3">
-      <div className="flex w-12 shrink-0 flex-col items-end pt-0.5">
-        <span className={`text-[11px] font-semibold tabular-nums ${accent ? "text-emerald-400" : "text-zinc-300"}`}>{time}</span>
+      <div className="flex w-14 shrink-0 flex-col items-end pt-0.5">
+        {editing && onTime ? (
+          <input
+            value={time}
+            onChange={(e) => onTime(e.target.value)}
+            aria-label={`${title} 的时间`}
+            className="w-14 rounded-md border border-zinc-700 bg-zinc-950/80 px-1 py-0.5 text-right text-[11px] font-semibold tabular-nums text-emerald-300 outline-none focus:border-emerald-500"
+          />
+        ) : (
+          <span className={`text-[11px] font-semibold tabular-nums ${accent ? "text-emerald-400" : "text-zinc-300"}`}>{time}</span>
+        )}
       </div>
-      <div className="flex-1 pb-1">
-        <p className={`text-[11px] ${accent ? "text-emerald-400" : "text-zinc-500"}`}>{title}</p>
+      <div className="min-w-0 flex-1 pb-1">
+        <div className="flex items-start justify-between gap-1">
+          <p className={`text-[11px] ${accent ? "text-emerald-400" : "text-zinc-500"}`}>{title}</p>
+          {editing && onHide && (
+            <button
+              onClick={onHide}
+              aria-label={`删除「${title}」`}
+              className="shrink-0 rounded-md border border-zinc-800 px-1.5 text-[10px] text-zinc-500 hover:border-red-800 hover:text-red-400"
+            >
+              ✕ 删除
+            </button>
+          )}
+        </div>
         <div className="mt-1.5">{children}</div>
       </div>
     </div>
@@ -232,56 +282,119 @@ function StairClimberCard({
   );
 }
 
-// 中餐/下午加餐/爬楼机/晚餐 这一段的共用渲染（训练日与休息日都插入自己前面的早间内容之后）
-function SharedMealClock({
+// ---------- 周计划：可编辑的时间线 ----------
+// 每个"星期几"一套（如所有周一相同）；默认模板可改时间/删除，可加自定义事项；改一次长期生效
+type WeekDoc = {
+  edits: Record<string, { time?: string; hidden?: boolean }>;
+  customs: { id?: number; time: string; title: string; note?: string }[];
+};
+
+// 传给训练日/休息日视图的读写句柄
+type WeekHandle = {
+  editing: boolean;
+  time: (key: string, def: string) => string;
+  hidden: (key: string) => boolean;
+  setTime: (key: string, time: string) => void;
+  hide: (key: string) => void;
+  unhide: (key: string) => void;
+  customs: WeekDoc["customs"];
+  addCustom: (c: { time: string; title: string; note?: string }) => void;
+  updateCustom: (index: number, patch: Partial<{ time: string; title: string; note: string }>) => void;
+  removeCustom: (index: number) => void;
+};
+
+/** "07:30"/"7:30" → 分钟；非时间文本返回 NaN */
+function timeMin(t: string): number {
+  const m = /^(\d{1,2}):(\d{2})/.exec(t ?? "");
+  if (!m) return Number.NaN;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+// 中餐/加餐/晚餐 三张共用餐卡的内容（供训练日/休息日各自的节点使用）
+function SharedMealCard({
   meals,
-  stairClimber,
-  restVariant,
+  section,
+  keyName,
+  title,
   check,
   diet,
 }: {
   meals: MealPlan;
-  stairClimber: MealPlan["stairClimber"];
-  restVariant?: boolean;
+  section: string;
+  keyName: "lunch" | "snack" | "dinner";
+  title: string;
   check?: CheckCtx;
   diet?: DietCtx;
 }) {
-  const mealsItems = (key: string, fallback: string[]) =>
-    meals.meals.find((m) => m.name.includes(key))?.items ?? fallback;
-  const ed = (section: string, fallback: string[]) => (diet ? { section, fallback, ctx: diet } : undefined);
+  const fallback =
+    keyName === "lunch" ? DEFAULT_LUNCH : keyName === "snack" ? DEFAULT_SNACK : DEFAULT_DINNER;
+  const items = meals.meals.find((m) => m.name.includes(section))?.items ?? fallback;
   return (
-    <>
-      <TimelineItem time={DAY_TIMES.lunch} title="中餐">
-        <MealCard
-          title="🍚 中餐"
-          items={mealsItems("午餐", DEFAULT_LUNCH)}
-          check={check ? { ...check, prefix: "lunch" } : undefined}
-          diet={ed("lunch", mealsItems("午餐", DEFAULT_LUNCH))}
-        />
-      </TimelineItem>
+    <MealCard
+      title={title}
+      items={items}
+      check={check ? { ...check, prefix: keyName } : undefined}
+      diet={diet ? { section: keyName, fallback: items, ctx: diet } : undefined}
+    />
+  );
+}
 
-      <TimelineItem time={DAY_TIMES.snack} title="下午加餐">
-        <MealCard
-          title="🥛 下午加餐"
-          items={mealsItems("加餐", DEFAULT_SNACK)}
-          check={check ? { ...check, prefix: "snack" } : undefined}
-          diet={ed("snack", mealsItems("加餐", DEFAULT_SNACK))}
+// 自定义事项行（自己加的带时间的事；勾选状态按当天日期保存）
+function CustomTaskRow({
+  c,
+  index,
+  handle,
+  check,
+}: {
+  c: { id?: number; time: string; title: string; note?: string };
+  index: number;
+  handle: WeekHandle;
+  check?: CheckCtx;
+}) {
+  const checked = check ? check.get(`custom:${c.id ?? index}`) : false;
+  if (handle.editing) {
+    const inputCls =
+      "min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-950/70 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-emerald-600";
+    return (
+      <div className="flex items-start gap-2 py-1">
+        <input
+          value={c.time}
+          onChange={(e) => handle.updateCustom(index, { time: e.target.value })}
+          aria-label="时间"
+          placeholder="时间"
+          className={`${inputCls} !w-14 flex-none`}
         />
-      </TimelineItem>
-
-      <TimelineItem time={DAY_TIMES.stair} title={`爬楼机 · ${stairClimber.durationMin} 分钟`}>
-        <StairClimberCard stairClimber={stairClimber} restNote={restVariant} />
-      </TimelineItem>
-
-      <TimelineItem time={DAY_TIMES.dinner} title="晚餐">
-        <MealCard
-          title="🥗 晚餐"
-          items={mealsItems("晚餐", DEFAULT_DINNER)}
-          check={check ? { ...check, prefix: "dinner" } : undefined}
-          diet={ed("dinner", mealsItems("晚餐", DEFAULT_DINNER))}
+        <input
+          value={c.title}
+          onChange={(e) => handle.updateCustom(index, { title: e.target.value })}
+          aria-label="事情"
+          placeholder="要做什么"
+          className={inputCls}
         />
-      </TimelineItem>
-    </>
+        <button
+          onClick={() => handle.removeCustom(index)}
+          aria-label="删除该事项"
+          className="shrink-0 rounded-md border border-zinc-800 px-1.5 py-1 text-[10px] text-red-400/90 hover:border-red-700"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex gap-3">
+      <div className="flex w-14 shrink-0 justify-end pt-0.5">
+        <span className={`text-[11px] font-semibold tabular-nums ${checked ? "text-emerald-400" : "text-zinc-300"}`}>
+          {c.time}
+        </span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <CheckRow item={`custom:${c.id ?? index}`} ctx={check ?? NOOP_CHECK}>
+          {c.title}
+          {c.note ? ` — ${c.note}` : ""}
+        </CheckRow>
+      </div>
+    </div>
   );
 }
 
@@ -436,6 +549,7 @@ function TrainingDay({
   done,
   check,
   diet,
+  week,
   onSetDone,
 }: {
   day: DayPlan;
@@ -446,6 +560,7 @@ function TrainingDay({
   done: boolean;
   check?: CheckCtx;
   diet?: DietCtx;
+  week: WeekHandle;
   onSetDone: (next: boolean) => Promise<boolean>;
 }) {
   const [saving, setSaving] = useState(false);
@@ -462,6 +577,128 @@ function TrainingDay({
 
   const breakfastItems = meals.meals.find((m) => m.name.includes("早餐"))?.items ?? DEFAULT_BREAKFAST;
   const ed = (section: string, fallback: string[]) => (diet ? { section, fallback, ctx: diet } : undefined);
+
+  // 时间线 = 默认节点（可改时间/删除）+ 自定义事项，统一按时间排序
+  const nodes: { key: string; min: number; seq: number; el: React.ReactElement }[] = [];
+  const push = (key: string, defTime: string, seq: number, title: string, content: React.ReactNode) => {
+    if (week.hidden(key)) return;
+    const time = week.time(key, defTime);
+    nodes.push({
+      key,
+      min: timeMin(time),
+      seq,
+      el: (
+        <TimelineItem
+          time={time}
+          title={title}
+          editing={week.editing}
+          onTime={(t) => week.setTime(key, t)}
+          onHide={() => week.hide(key)}
+        >
+          {content}
+        </TimelineItem>
+      ),
+    });
+  };
+
+  push("wake", "05:00", 1, "起床", <p className="text-[11px] text-zinc-500">洗漱 + 200ml 水</p>);
+
+  push(
+    "breakfast",
+    "05:10",
+    2,
+    "早餐",
+    <MealCard
+      title="🍳 早餐"
+      items={breakfastItems}
+      check={check ? { ...check, prefix: "breakfast" } : undefined}
+      diet={ed("breakfast", breakfastItems)}
+    />,
+  );
+
+  push(
+    "pre",
+    "05:30",
+    3,
+    "练前吃（练前 30-60 分钟）",
+    <MealCard
+      title="🍌 练前吃"
+      when={meals.preWorkout.when}
+      items={meals.preWorkout.items ?? DEFAULT_PRE}
+      accent
+      check={check ? { ...check, prefix: "pre" } : undefined}
+      diet={ed("pre", meals.preWorkout.items ?? DEFAULT_PRE)}
+    />,
+  );
+
+  push(
+    "workout",
+    "06:00",
+    4,
+    `出发去${day.place}，开练 ${day.place}`,
+    <>
+      <div className="flex flex-wrap gap-1.5">
+        <span className="rounded-full bg-zinc-800/80 px-2 py-0.5 text-[10px] text-zinc-300">
+          {PLACE_EMOJI[day.place] ?? "📍"} {day.place}
+        </span>
+        <span className="rounded-full bg-emerald-950/60 px-2 py-0.5 text-[10px] text-emerald-400">{day.slot}</span>
+        <span className="rounded-full bg-zinc-800/80 px-2 py-0.5 text-[10px] text-zinc-400">≈{day.minutes} 分钟</span>
+      </div>
+      {/* 动作表（带勾选 + 输入） */}
+      <div className="mt-3 mb-3 overflow-hidden rounded-2xl border border-zinc-800">
+        <div className="flex items-baseline justify-between border-b border-zinc-800 bg-zinc-900 px-3 py-2">
+          <p className="text-xs font-semibold text-emerald-400">🎯 动作（点击打勾 · 填重量/次数/组数）</p>
+          <span className="text-[10px] text-zinc-500">{day.exercises.length} 个</span>
+        </div>
+        {day.exercises.map((ex, i) => (
+          <ExerciseRow key={`${dateIso}-${i}`} ex={ex} dateIso={dateIso} />
+        ))}
+      </div>
+    </>,
+  );
+
+  push(
+    "post",
+    "07:30",
+    5,
+    "练后吃（练后 30 分钟内 · 最重要的一餐）",
+    <MealCard
+      title="🍗 练后吃"
+      when={meals.postWorkout.when}
+      items={meals.postWorkout.items ?? DEFAULT_POST}
+      accent
+      check={check ? { ...check, prefix: "post" } : undefined}
+      diet={ed("post", meals.postWorkout.items ?? DEFAULT_POST)}
+    />,
+  );
+
+  push("lunch", DAY_TIMES.lunch, 6, "中餐", (
+    <SharedMealCard meals={meals} section="午餐" keyName="lunch" title="🍚 中餐" check={check} diet={diet} />
+  ));
+  push("snack", DAY_TIMES.snack, 7, "下午加餐", (
+    <SharedMealCard meals={meals} section="加餐" keyName="snack" title="🥛 下午加餐" check={check} diet={diet} />
+  ));
+  push("stair", DAY_TIMES.stair, 8, `爬楼机 · ${stairClimber.durationMin} 分钟`, (
+    <StairClimberCard stairClimber={stairClimber} />
+  ));
+  push("dinner", DAY_TIMES.dinner, 9, "晚餐", (
+    <SharedMealCard meals={meals} section="晚餐" keyName="dinner" title="🥗 晚餐" check={check} diet={diet} />
+  ));
+
+  week.customs.forEach((c, i) => {
+    const m = timeMin(c.time);
+    nodes.push({
+      key: `custom-${c.id ?? i}`,
+      min: Number.isNaN(m) ? Number.POSITIVE_INFINITY : m,
+      seq: 1000 + i,
+      el: <CustomTaskRow c={c} index={i} handle={week} check={check} />,
+    });
+  });
+  nodes.sort((a, b) => {
+    const am = Number.isNaN(a.min) ? Number.POSITIVE_INFINITY : a.min;
+    const bm = Number.isNaN(b.min) ? Number.POSITIVE_INFINITY : b.min;
+    return am - bm || a.seq - b.seq;
+  });
 
   return (
     <div className="space-y-5">
@@ -483,64 +720,16 @@ function TrainingDay({
       {/* 2. 时间线 */}
       <div>
         <h3 className="mb-3 text-sm font-semibold text-zinc-200">⏰ 今天的时间线</h3>
-
-        <TimelineItem time="05:00" title="起床">
-          <p className="text-[11px] text-zinc-500">洗漱 + 200ml 水</p>
-        </TimelineItem>
-
-        <TimelineItem time="05:10" title="早餐">
-          <MealCard
-            title="🍳 早餐"
-            items={breakfastItems}
-            check={check ? { ...check, prefix: "breakfast" } : undefined}
-            diet={ed("breakfast", breakfastItems)}
-          />
-        </TimelineItem>
-
-        <TimelineItem time="05:30" title="练前吃（练前 30-60 分钟）">
-          <MealCard
-            title="🍌 练前吃"
-            when={meals.preWorkout.when}
-            items={meals.preWorkout.items ?? DEFAULT_PRE}
-            accent
-            check={check ? { ...check, prefix: "pre" } : undefined}
-            diet={ed("pre", meals.preWorkout.items ?? DEFAULT_PRE)}
-          />
-        </TimelineItem>
-
-        <TimelineItem time="06:00" title={`出发去${day.place}，开练 ${day.place}`}>
-          <div className="flex flex-wrap gap-1.5">
-            <span className="rounded-full bg-zinc-800/80 px-2 py-0.5 text-[10px] text-zinc-300">
-              {PLACE_EMOJI[day.place] ?? "📍"} {day.place}
-            </span>
-            <span className="rounded-full bg-emerald-950/60 px-2 py-0.5 text-[10px] text-emerald-400">{day.slot}</span>
-            <span className="rounded-full bg-zinc-800/80 px-2 py-0.5 text-[10px] text-zinc-400">≈{day.minutes} 分钟</span>
-          </div>
-        </TimelineItem>
-
-        {/* 动作表（带勾选 + 输入） */}
-        <div className="mt-3 mb-3 overflow-hidden rounded-2xl border border-zinc-800">
-          <div className="flex items-baseline justify-between border-b border-zinc-800 bg-zinc-900 px-3 py-2">
-            <p className="text-xs font-semibold text-emerald-400">🎯 动作（点击打勾 · 填重量/次数/组数）</p>
-            <span className="text-[10px] text-zinc-500">{day.exercises.length} 个</span>
-          </div>
-          {day.exercises.map((ex, i) => (
-            <ExerciseRow key={`${dateIso}-${i}`} ex={ex} dateIso={dateIso} />
+        <div className="space-y-4">
+          {nodes.map((n) => (
+            <div key={n.key}>{n.el}</div>
           ))}
         </div>
-
-        <TimelineItem time="07:30" title="练后吃（练后 30 分钟内 · 最重要的一餐）">
-          <MealCard
-            title="🍗 练后吃"
-            when={meals.postWorkout.when}
-            items={meals.postWorkout.items ?? DEFAULT_POST}
-            accent
-            check={check ? { ...check, prefix: "post" } : undefined}
-            diet={ed("post", meals.postWorkout.items ?? DEFAULT_POST)}
-          />
-        </TimelineItem>
-
-        <SharedMealClock meals={meals} stairClimber={stairClimber} check={check} diet={diet} />
+        {nodes.length === 0 && (
+          <p className="rounded-xl border border-dashed border-zinc-700 p-4 text-center text-xs text-zinc-500">
+            这一天没有安排 —— 点右上角「✎ 编辑安排」自己加
+          </p>
+        )}
       </div>
 
       {/* 完成 / 取消（再点一次可取消，防误触后无法恢复） */}
@@ -563,9 +752,72 @@ function TrainingDay({
   );
 }
 
-function RestDay({ meals, warmup, stairClimber, check, diet }: { meals: MealPlan; warmup: string[]; stairClimber: MealPlan["stairClimber"]; check?: CheckCtx; diet?: DietCtx }) {
+function RestDay({ meals, warmup, stairClimber, check, diet, week }: { meals: MealPlan; warmup: string[]; stairClimber: MealPlan["stairClimber"]; check?: CheckCtx; diet?: DietCtx; week: WeekHandle }) {
   const breakfastItems = meals.meals.find((m) => m.name.includes("早餐"))?.items ?? DEFAULT_BREAKFAST;
   const ed = (section: string, fallback: string[]) => (diet ? { section, fallback, ctx: diet } : undefined);
+
+  const nodes: { key: string; min: number; seq: number; el: React.ReactElement }[] = [];
+  const push = (key: string, defTime: string, seq: number, title: string, content: React.ReactNode) => {
+    if (week.hidden(key)) return;
+    const time = week.time(key, defTime);
+    nodes.push({
+      key,
+      min: timeMin(time),
+      seq,
+      el: (
+        <TimelineItem
+          time={time}
+          title={title}
+          editing={week.editing}
+          onTime={(t) => week.setTime(key, t)}
+          onHide={() => week.hide(key)}
+        >
+          {content}
+        </TimelineItem>
+      ),
+    });
+  };
+
+  push(
+    "wake",
+    "08:00",
+    1,
+    "起床 + 早餐（睡到自然醒）",
+    <MealCard
+      title="🍳 早餐"
+      items={breakfastItems}
+      check={check ? { ...check, prefix: "breakfast" } : undefined}
+      diet={ed("breakfast", breakfastItems)}
+    />,
+  );
+  push("lunch", DAY_TIMES.lunch, 2, "中餐", (
+    <SharedMealCard meals={meals} section="午餐" keyName="lunch" title="🍚 中餐" check={check} diet={diet} />
+  ));
+  push("snack", DAY_TIMES.snack, 3, "下午加餐", (
+    <SharedMealCard meals={meals} section="加餐" keyName="snack" title="🥛 下午加餐" check={check} diet={diet} />
+  ));
+  push("stair", DAY_TIMES.stair, 4, `爬楼机 · ${stairClimber.durationMin} 分钟`, (
+    <StairClimberCard stairClimber={stairClimber} restNote />
+  ));
+  push("dinner", DAY_TIMES.dinner, 5, "晚餐", (
+    <SharedMealCard meals={meals} section="晚餐" keyName="dinner" title="🥗 晚餐" check={check} diet={diet} />
+  ));
+
+  week.customs.forEach((c, i) => {
+    const m = timeMin(c.time);
+    nodes.push({
+      key: `custom-${c.id ?? i}`,
+      min: Number.isNaN(m) ? Number.POSITIVE_INFINITY : m,
+      seq: 1000 + i,
+      el: <CustomTaskRow c={c} index={i} handle={week} check={check} />,
+    });
+  });
+  nodes.sort((a, b) => {
+    const am = Number.isNaN(a.min) ? Number.POSITIVE_INFINITY : a.min;
+    const bm = Number.isNaN(b.min) ? Number.POSITIVE_INFINITY : b.min;
+    return am - bm || a.seq - b.seq;
+  });
+
   return (
     <div className="space-y-5">
       {/* 休息日可选项：走路/拉伸 */}
@@ -595,18 +847,120 @@ function RestDay({ meals, warmup, stairClimber, check, diet }: { meals: MealPlan
       {/* 时间线（无训练，仅吃 + 爬楼机可加） */}
       <div>
         <h3 className="mb-3 text-sm font-semibold text-zinc-200">⏰ 休息日时间线</h3>
-
-        <TimelineItem time="08:00" title="起床 + 早餐（睡到自然醒）">
-          <MealCard
-            title="🍳 早餐"
-            items={breakfastItems}
-            check={check ? { ...check, prefix: "breakfast" } : undefined}
-            diet={ed("breakfast", breakfastItems)}
-          />
-        </TimelineItem>
-
-        <SharedMealClock meals={meals} stairClimber={stairClimber} restVariant check={check} diet={diet} />
+        <div className="space-y-4">
+          {nodes.map((n) => (
+            <div key={n.key}>{n.el}</div>
+          ))}
+        </div>
+        {nodes.length === 0 && (
+          <p className="rounded-xl border border-dashed border-zinc-700 p-4 text-center text-xs text-zinc-500">
+            这一天没有安排 —— 点右上角「✎ 编辑安排」自己加
+          </p>
+        )}
       </div>
+    </div>
+  );
+}
+
+// 全局"随手待办"：不区分日期、没定时间的事，做完打勾
+function InboxPanel() {
+  const [items, setItems] = useState<{ id: number; text: string; checked: boolean }[]>([]);
+  const [text, setText] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/inbox")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => {
+        if (alive) setItems(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function post(body: Record<string, unknown>) {
+    try {
+      const res = await fetch("/api/inbox", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  async function add() {
+    const t = text.trim();
+    if (!t) return;
+    const ok = await post({ action: "add", text: t });
+    if (ok) {
+      // 乐观插入一条（id 用时间戳占位，刷新后对齐）
+      setItems((s) => [{ id: Date.now(), text: t, checked: false }, ...s]);
+      setText("");
+    }
+  }
+  function toggle(id: number, checked: boolean) {
+    setItems((s) => s.map((i) => (i.id === id ? { ...i, checked } : i)));
+    post({ action: "toggle", id, checked });
+  }
+  function del(id: number) {
+    setItems((s) => s.filter((i) => i.id !== id));
+    post({ action: "delete", id });
+  }
+
+  return (
+    <div className="mt-8 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-sm font-semibold text-zinc-200">🗒️ 随手待办（没定时间的事）</h2>
+        <span className="text-[10px] text-zinc-500">{items.length ? `${items.length} 条` : "想记什么就写什么"}</span>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          placeholder="例如：买牛奶、回复邮件、练完拉伸…"
+          className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-emerald-500 focus:outline-none"
+        />
+        <button
+          onClick={add}
+          className="shrink-0 rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-500"
+        >
+          添加
+        </button>
+      </div>
+      {items.length > 0 && (
+        <ul className="mt-3 space-y-1">
+          {items.map((it) => (
+            <li key={it.id} className="flex items-center gap-2">
+              <button
+                onClick={() => toggle(it.id, !it.checked)}
+                aria-pressed={it.checked}
+                aria-label={it.checked ? "取消完成" : "标记完成"}
+                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-md border text-[10px] ${
+                  it.checked ? "border-emerald-500 bg-emerald-500 text-zinc-950" : "border-zinc-600"
+                }`}
+              >
+                {it.checked ? "✓" : ""}
+              </button>
+              <span className={`flex-1 text-xs leading-5 ${it.checked ? "text-zinc-500 line-through" : "text-zinc-200"}`}>
+                {it.text}
+              </span>
+              <button
+                onClick={() => del(it.id)}
+                aria-label="删除该条"
+                className="shrink-0 px-1 text-[10px] text-zinc-600 hover:text-red-400"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -753,6 +1107,82 @@ export default function PlanView({
     },
   };
 
+  // ---------- 周计划：当前星期几的节点编辑/自定义（自动保存） ----------
+  const [editingDay, setEditingDay] = useState(false);
+  const [newTaskTime, setNewTaskTime] = useState("07:00");
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  // 用 {day, doc, ready} 结构：渲染时 day 不匹配就视为空，避免跨星期几闪烁
+  const [weekState, setWeekState] = useState<{ day: string; doc: WeekDoc; ready: boolean }>({
+    day: "",
+    doc: { edits: {}, customs: [] },
+    ready: false,
+  });
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/week-schedule?weekday=${encodeURIComponent(dayName)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { edits?: WeekDoc["edits"]; customs?: WeekDoc["customs"] } | null) => {
+        if (!alive) return;
+        const doc: WeekDoc =
+          d && typeof d === "object"
+            ? { edits: d.edits ?? {}, customs: d.customs ?? [] }
+            : { edits: {}, customs: [] };
+        setWeekState({ day: dayName, doc, ready: true });
+      })
+      .catch(() => {
+        if (!alive) return;
+        setWeekState({ day: dayName, doc: { edits: {}, customs: [] }, ready: true });
+      });
+    return () => {
+      alive = false;
+    };
+  }, [dayName]);
+
+  const weekReady = weekState.day === dayName && weekState.ready;
+  const weekDoc = useMemo(
+    () => (weekState.day === dayName ? weekState.doc : { edits: {}, customs: [] }),
+    [weekState, dayName],
+  );
+  const patchDoc = (fn: (doc: WeekDoc) => WeekDoc) =>
+    setWeekState((s) => (s.day === dayName ? { ...s, doc: fn(s.doc) } : s));
+
+  // 有改动时自动保存（防抖 600ms）
+  useEffect(() => {
+    if (!weekReady) return;
+    const t = setTimeout(() => {
+      fetch("/api/week-schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          weekday: dayName,
+          edits: weekDoc.edits,
+          customs: weekDoc.customs.map((c) => ({ time: c.time, title: c.title, note: c.note ?? "" })),
+        }),
+      }).catch(() => {});
+    }, 600);
+    return () => clearTimeout(t);
+  }, [weekDoc, weekReady, dayName]);
+
+  const setEdit = (key: string, patch: { time?: string; hidden?: boolean }) =>
+    patchDoc((d) => ({ ...d, edits: { ...d.edits, [key]: { ...(d.edits[key] ?? {}), ...patch } } }));
+
+  const week: WeekHandle = {
+    editing: editingDay,
+    time: (key, def) => weekDoc.edits[key]?.time || def,
+    hidden: (key) => !!weekDoc.edits[key]?.hidden,
+    setTime: (key, t) => setEdit(key, { time: t }),
+    hide: (key) => setEdit(key, { hidden: true }),
+    unhide: (key) => setEdit(key, { hidden: false }),
+    customs: weekDoc.customs,
+    addCustom: (c) => patchDoc((d) => ({ ...d, customs: [...d.customs, c] })),
+    updateCustom: (index, patch) =>
+      patchDoc((d) => ({ ...d, customs: d.customs.map((c, i) => (i === index ? { ...c, ...patch } : c)) })),
+    removeCustom: (index) =>
+      patchDoc((d) => ({ ...d, customs: d.customs.filter((_, i) => i !== index) })),
+  };
+
+  const hiddenKeys = Object.keys(weekDoc.edits).filter((k) => weekDoc.edits[k]?.hidden);
+
   // 完成 / 取消打卡（done 标记写 /api/records；再点一次即取消）
   async function setDayDone(next: boolean): Promise<boolean> {
     try {
@@ -878,10 +1308,98 @@ export default function PlanView({
         })}
       </div>
 
+      {/* 编辑工具条：改时间/删项/加自己的事项（对该星期几长期生效） */}
+      <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-900/40 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {editingDay ? (
+            <>
+              <button
+                onClick={() => setEditingDay(false)}
+                className="rounded-full bg-emerald-600 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
+              >
+                ✓ 完成编辑
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm(`把${dayName}恢复成默认模板？会清掉这一天所有自定义。`)) {
+                    patchDoc(() => ({ edits: {}, customs: [] }));
+                    setNewTaskTitle("");
+                  }
+                }}
+                className="rounded-full border border-zinc-700 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:border-red-700 hover:text-red-400"
+              >
+                ↺ 恢复默认
+              </button>
+              <span className="text-[10px] text-zinc-500">点左边时间可直接改 · ✕ 删除 · 改动自动保存</span>
+            </>
+          ) : (
+            <button
+              onClick={() => setEditingDay(true)}
+              className="rounded-full border border-emerald-800 bg-emerald-950/40 px-3.5 py-1.5 text-xs font-medium text-emerald-300 transition-colors hover:border-emerald-500"
+            >
+              ✎ 编辑{dayName}的安排
+            </button>
+          )}
+        </div>
+
+        {editingDay && (
+          <div className="mt-2.5 flex items-center gap-2">
+            <input
+              value={newTaskTime}
+              onChange={(e) => setNewTaskTime(e.target.value)}
+              aria-label="时间"
+              placeholder="时间"
+              className="w-16 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-center text-xs text-emerald-300 outline-none focus:border-emerald-500"
+            />
+            <input
+              value={newTaskTitle}
+              onChange={(e) => setNewTaskTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const t = newTaskTitle.trim();
+                  if (!t) return;
+                  week.addCustom({ time: newTaskTime.trim() || "07:00", title: t });
+                  setNewTaskTitle("");
+                }
+              }}
+              aria-label="要做什么"
+              placeholder={`${dayName}固定要做的事？例如：15:00 背单词 50 个`}
+              className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-xs text-zinc-100 placeholder-zinc-600 outline-none focus:border-emerald-500"
+            />
+            <button
+              onClick={() => {
+                const t = newTaskTitle.trim();
+                if (!t) return;
+                week.addCustom({ time: newTaskTime.trim() || "07:00", title: t });
+                setNewTaskTitle("");
+              }}
+              className="shrink-0 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-emerald-500"
+            >
+              ＋ 加入
+            </button>
+          </div>
+        )}
+
+        {editingDay && hiddenKeys.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] text-zinc-500">已删除的默认项（点一下恢复）：</span>
+            {hiddenKeys.map((k) => (
+              <button
+                key={k}
+                onClick={() => week.unhide(k)}
+                className="rounded-full border border-zinc-700 px-2 py-0.5 text-[10px] text-zinc-400 transition-colors hover:border-emerald-600 hover:text-emerald-300"
+              >
+                ↺ {NODE_LABELS[k] ?? k}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* 当日内容 */}
       <div className="mt-5">
         {dayPlan.type === "休息" ? (
-          <RestDay meals={safeMeals} warmup={warmup} stairClimber={safeMeals.stairClimber} check={checkCtx} diet={dietCtx} />
+          <RestDay meals={safeMeals} warmup={warmup} stairClimber={safeMeals.stairClimber} check={checkCtx} diet={dietCtx} week={week} />
         ) : (
           <TrainingDay
             day={dayPlan}
@@ -892,11 +1410,15 @@ export default function PlanView({
             done={done}
             check={checkCtx}
             diet={dietCtx}
+            week={week}
             onSetDone={setDayDone}
           />
         )}
       </div>
       <p className="mt-2 text-center text-[10px] text-zinc-600">快捷键：← → 或 A / D 切换日期</p>
+
+      {/* 随手待办（全局） */}
+      <InboxPanel />
 
       {/* 营养数字卡（首页关闭——摘要已有） */}
       {showMacros && (
