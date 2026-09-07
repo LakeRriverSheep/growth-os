@@ -623,17 +623,16 @@ function ExerciseRow({ ex, dateIso }: { ex: Exercise; dateIso: string }) {
       >
         {state.checked && <span className="text-[12px] font-bold leading-none">✓</span>}
       </button>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline justify-between gap-2">
-          <p className={`text-xs font-medium ${state.checked ? "text-emerald-300 line-through" : "text-zinc-200"}`}>
-            {ex.name}
-          </p>
-          <span className="shrink-0 text-[10px] text-zinc-600">起 {ex.startWeight}</span>
-        </div>
+      <div className="min-w-0 flex-1">
+        {/* 动作名占整行，不再被右边的"起…"挤窄 */}
+        <p className={`text-[13px] font-medium leading-snug ${state.checked ? "text-emerald-300 line-through" : "text-zinc-200"}`}>
+          {ex.name}
+        </p>
+        <p className="mt-0.5 text-[10px] text-zinc-500">起 {ex.startWeight}</p>
         <p className="mt-0.5 text-[10px] text-zinc-500">
           {ex.muscle} · 计划 {ex.setsReps} · 休 {ex.rest}
         </p>
-        <p className="mt-0.5 text-[10px] leading-4 text-emerald-600/90">{ex.cue}</p>
+        <p className="mt-1 text-[11px] leading-5 text-emerald-600/90">{ex.cue}</p>
         <div className="mt-1.5 grid grid-cols-3 gap-1.5">
           <label className="block">
             <span className="block text-center text-[9px] text-zinc-600">重量(kg)</span>
