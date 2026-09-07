@@ -1225,9 +1225,19 @@ function InboxPanel({
                   className="min-w-0 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 outline-none focus:border-emerald-500"
                 />
               ) : (
-                <span className={`min-w-0 flex-1 text-xs leading-5 ${it.checked ? "text-zinc-500 line-through" : "text-zinc-200"}`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingId(it.id);
+                    setDraft(it.text);
+                  }}
+                  aria-label={`改这条待办：${it.text}`}
+                  className={`min-w-0 flex-1 rounded px-0.5 py-0.5 text-left text-xs leading-5 transition-colors hover:bg-zinc-800 ${
+                    it.checked ? "text-zinc-500 line-through" : "text-zinc-200"
+                  }`}
+                >
                   {it.text}
-                </span>
+                </button>
               )}
 
               {editingId === it.id ? (
@@ -1239,16 +1249,6 @@ function InboxPanel({
                 </button>
               ) : (
                 <>
-                  <button
-                    onClick={() => {
-                      setEditingId(it.id);
-                      setDraft(it.text);
-                    }}
-                    aria-label="改这条待办"
-                    className="shrink-0 px-1 text-[11px] text-zinc-500 hover:text-emerald-400"
-                  >
-                    ✎
-                  </button>
                   <button
                     onClick={() => {
                       setSchedId(it.id);
