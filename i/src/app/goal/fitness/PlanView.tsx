@@ -333,6 +333,8 @@ type WeekDoc = {
 
 // 传给训练日/休息日视图的读写句柄（无需先进入"编辑模式"，每条都可直接改）
 type WeekHandle = {
+  /** 当前正在看的星期几（如"周一"），挪动待办到其他日期时用 */
+  day: string;
   time: (key: string, def: string) => string;
   hidden: (key: string) => boolean;
   hiddenKeys: string[];
@@ -382,7 +384,7 @@ function SharedMealCard({
   );
 }
 
-// 自定义事项行（自己加的带时间的事；勾选状态按当天日期保存）。每条右侧直接可改/删，无需先进入编辑模式
+// 自定义事项行（自己加的带时间的事；勾选状态按当天日期保存）。每条右侧直接可改/删/挪，无需先进入编辑模式
 function CustomTaskRow({
   c,
   index,
@@ -396,9 +398,49 @@ function CustomTaskRow({
 }) {
   const [edit, setEdit] = useState(false);
   const [snap, setSnap] = useState<{ time: string; title: string } | null>(null);
+  // 挪到其他日期/时间
+  const [moving, setMoving] = useState(false);
+  const [moveTo, setMoveTo] = useState({ weekday: handle.day, time: c.time });
+  const [moveBusy, setMoveBusy] = useState(false);
+  const [moveErr, setMoveErr] = useState(false);
   const checked = check ? check.get(`custom:${c.id ?? index}`) : false;
   const inputCls =
     "min-w-0 flex-1 rounded-md border border-zinc-800 bg-zinc-950/70 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-emerald-600";
+
+  // 挪动：同一天只改时间；跨天则把这条追加到目标星期几，再从当前天移除（当前天的删除走自动保存）
+  async function doMove() {
+    if (moveBusy) return;
+    setMoveBusy(true);
+    setMoveErr(false);
+    try {
+      const time = moveTo.time.trim() || c.time;
+      if (moveTo.weekday === handle.day) {
+        handle.updateCustom(index, { time });
+      } else {
+        const g = await fetch(`/api/week-schedule?weekday=${encodeURIComponent(moveTo.weekday)}`);
+        const doc = g.ok
+          ? ((await g.json()) as { edits: Record<string, unknown>; customs: { time: string; title: string; note?: string }[] })
+          : null;
+        if (!doc) throw new Error("load failed");
+        const res = await fetch("/api/week-schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            weekday: moveTo.weekday,
+            edits: doc.edits ?? {},
+            customs: [...(doc.customs ?? []), { time, title: c.title, note: c.note ?? "" }],
+          }),
+        });
+        if (!res.ok) throw new Error("save failed");
+        handle.removeCustom(index); // 触发当前天的防抖自动保存，把这条从原日期删掉
+      }
+      setMoving(false);
+    } catch {
+      setMoveErr(true);
+    } finally {
+      setMoveBusy(false);
+    }
+  }
 
   if (edit) {
     return (
@@ -442,35 +484,82 @@ function CustomTaskRow({
     );
   }
   return (
-    <div className="flex items-start gap-2">
-      <button
-        type="button"
-        onClick={() => {
-          setSnap({ time: c.time, title: c.title });
-          setEdit(true);
-        }}
-        aria-label="改这条事项的时间"
-        className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums transition-colors ${
-          checked ? "bg-emerald-950/60 text-emerald-400" : "bg-zinc-800/80 text-zinc-300"
-        } hover:bg-zinc-700`}
-      >
-        {c.time}
-      </button>
-      <div className="min-w-0 flex-1">
-        <CheckRow item={`custom:${c.id ?? index}`} ctx={check ?? NOOP_CHECK}>
-          {c.title}
-          {c.note ? ` — ${c.note}` : ""}
-        </CheckRow>
+    <div className="space-y-1">
+      <div className="flex items-start gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setSnap({ time: c.time, title: c.title });
+            setEdit(true);
+          }}
+          aria-label="改这条事项的时间"
+          className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums transition-colors ${
+            checked ? "bg-emerald-950/60 text-emerald-400" : "bg-zinc-800/80 text-zinc-300"
+          } hover:bg-zinc-700`}
+        >
+          {c.time}
+        </button>
+        <div className="min-w-0 flex-1">
+          <CheckRow item={`custom:${c.id ?? index}`} ctx={check ?? NOOP_CHECK}>
+            {c.title}
+            {c.note ? ` — ${c.note}` : ""}
+          </CheckRow>
+        </div>
+        <button
+          onClick={() => {
+            setMoveTo({ weekday: handle.day, time: c.time });
+            setMoveErr(false);
+            setMoving((v) => !v);
+          }}
+          aria-label="挪到其他日期或时间"
+          className="shrink-0 px-1 pt-0.5 text-[11px] text-zinc-600 hover:text-emerald-400"
+        >
+          📅
+        </button>
+        <button
+          onClick={() => {
+            if (window.confirm("确定删除这条事项？")) handle.removeCustom(index);
+          }}
+          aria-label="删除这条事项"
+          className="shrink-0 px-1 pt-0.5 text-[11px] text-zinc-600 hover:text-red-400"
+        >
+          ✕
+        </button>
       </div>
-      <button
-        onClick={() => {
-          if (window.confirm("确定删除这条事项？")) handle.removeCustom(index);
-        }}
-        aria-label="删除这条事项"
-        className="shrink-0 px-1 pt-0.5 text-[11px] text-zinc-600 hover:text-red-400"
-      >
-        ✕
-      </button>
+      {moving && (
+        <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-emerald-900/50 bg-emerald-950/20 px-2 py-1.5">
+          <span className="text-[10px] text-zinc-500">挪到</span>
+          <select
+            value={moveTo.weekday}
+            onChange={(e) => setMoveTo((s) => ({ ...s, weekday: e.target.value }))}
+            aria-label="目标日期"
+            className="rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-[10px] text-zinc-200 outline-none"
+          >
+            {ALL_DAYS.map((d) => (
+              <option key={d} value={d}>
+                {d === handle.day ? `${d}（当天）` : d}
+              </option>
+            ))}
+          </select>
+          <input
+            value={moveTo.time}
+            onChange={(e) => setMoveTo((s) => ({ ...s, time: e.target.value }))}
+            aria-label="目标时间"
+            className="w-14 rounded border border-zinc-700 bg-zinc-950 px-1 py-0.5 text-center text-[10px] text-emerald-300 outline-none"
+          />
+          <button
+            onClick={doMove}
+            disabled={moveBusy}
+            className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-medium text-white disabled:opacity-50"
+          >
+            {moveBusy ? "挪动中…" : moveTo.weekday === handle.day ? "改时间" : "挪过去"}
+          </button>
+          <button onClick={() => setMoving(false)} className="px-1 text-[10px] text-zinc-500">
+            取消
+          </button>
+          {moveErr && <span className="text-[10px] text-red-400">挪动失败，请重试</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -1550,6 +1639,7 @@ export default function PlanView({
     patchDoc((d) => ({ ...d, edits: { ...d.edits, [key]: { ...(d.edits[key] ?? {}), ...patch } } }));
 
   const week: WeekHandle = {
+    day: dayName,
     time: (key, def) => weekDoc.edits[key]?.time || def,
     hidden: (key) => !!weekDoc.edits[key]?.hidden,
     hiddenKeys: Object.keys(weekDoc.edits).filter((k) => weekDoc.edits[k]?.hidden),
