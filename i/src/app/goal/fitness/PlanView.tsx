@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FitnessPlan, DayPlan, Exercise, MealPlan } from "@/lib/fitness";
+import { coursesOf, type Course } from "@/lib/schedule";
 
 const ALL_DAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 const PLACE_EMOJI: Record<string, string> = { 健身房: "🏟️", 家里: "🏠", 户外: "🌳" };
@@ -381,6 +382,26 @@ function SharedMealCard({
       check={check ? { ...check, prefix: keyName } : undefined}
       diet={diet ? { section: keyName, fallback: items, ctx: diet } : undefined}
     />
+  );
+}
+
+// 课程行（课表，只读：改课表要去 src/lib/schedule.ts）
+function ClassRow({ c }: { c: Course }) {
+  return (
+    <div className="min-w-0 rounded-xl border border-sky-900/60 bg-sky-950/20 px-2.5 py-1.5">
+      <div className="flex items-baseline gap-2">
+        <span className="shrink-0 rounded-md bg-sky-950/70 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-sky-300">
+          {c.start}
+          <span className="text-sky-500/80">-{c.end}</span>
+        </span>
+        <p className="min-w-0 flex-1 text-[12px] font-medium leading-snug text-zinc-100">
+          🎓 {c.name}
+        </p>
+      </div>
+      <p className="mt-0.5 text-[10px] text-zinc-500">
+        📍 {c.place} · {c.teacher} · {c.weeks}周
+      </p>
+    </div>
   );
 }
 
@@ -941,6 +962,17 @@ function TrainingDay({
     <SharedMealCard meals={meals} section="晚餐" keyName="dinner" title="🥗 晚餐" check={check} diet={diet} />
   ));
 
+  // 课表：按星期几自动进入当天时间线（只读，改课表去 src/lib/schedule.ts）
+  coursesOf(week.day).forEach((c, i) => {
+    nodes.push({
+      key: `class-${c.id}`,
+      time: c.start,
+      min: timeMin(c.start),
+      seq: 500 + i,
+      el: <ClassRow c={c} />,
+    });
+  });
+
   week.customs.forEach((c, i) => {
     const m = timeMin(c.time);
     nodes.push({
@@ -1105,6 +1137,17 @@ function RestDay({ meals, warmup, stairClimber, check, diet, week }: { meals: Me
   push("dinner", DAY_TIMES.dinner, 5, "晚餐", (
     <SharedMealCard meals={meals} section="晚餐" keyName="dinner" title="🥗 晚餐" check={check} diet={diet} />
   ));
+
+  // 课表：按星期几自动进入当天时间线（只读，改课表去 src/lib/schedule.ts）
+  coursesOf(week.day).forEach((c, i) => {
+    nodes.push({
+      key: `class-${c.id}`,
+      time: c.start,
+      min: timeMin(c.start),
+      seq: 500 + i,
+      el: <ClassRow c={c} />,
+    });
+  });
 
   week.customs.forEach((c, i) => {
     const m = timeMin(c.time);
