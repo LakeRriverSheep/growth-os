@@ -136,7 +136,27 @@ test("营养：有体脂率走 Katch-McArdle，增肌 +250", () => {
   // 3 天/周 → 活动系数 1.375
   assert.equal(p.macros.tdee, Math.round(p.macros.bmr * 1.375));
   assert.equal(p.macros.targetKcal, p.macros.tdee + 250);
-  assert.equal(p.macros.protein, 108); // 60 × 1.8
+  assert.equal(p.macros.protein, 120); // 60 × 2.0
+});
+
+test("营养：碳水按体重封顶 4g/kg（不让余量把赤字吃光），脂肪 ≥45g", () => {
+  const p = generateFitnessPlan(baseInput());
+  assert.equal(p.macros.carb, 240); // min(余量 320, 60×4)
+  assert.equal(p.macros.carbRest, 180); // 60×3
+  assert.ok(p.macros.fat >= 45 && p.macros.fat === 48); // 60×0.8
+
+  // 55kg 本人数据：蛋白 110 / 碳水 220 / 脂肪 45（对齐已定方案）
+  const me = generateFitnessPlan(
+    baseInput({
+      targets: ["增肌", "减脂"],
+      weekdays: ["周一", "周二", "周四", "周六"],
+      profile: { ...baseInput().profile, weight: "55", height: "175", bodyFat: "18.3" },
+    }),
+  );
+  assert.equal(me.macros.protein, 110);
+  assert.equal(me.macros.carb, 220);
+  assert.equal(me.macros.fat, 45);
+  assert.equal(me.macros.carbRest, 165);
 });
 
 test("营养：减脂 -350，无体脂率回退 Mifflin-St Jeor", () => {
@@ -151,12 +171,12 @@ test("营养：减脂 -350，无体脂率回退 Mifflin-St Jeor", () => {
 test("健身餐：练前/练后/四餐/采购/渠道/厨具全齐", () => {
   const p = generateFitnessPlan(baseInput());
   assert.ok(p.meals.preWorkout.items.length >= 3);
-  assert.ok(p.meals.postWorkout.when.includes("30-60"));
+  assert.ok(p.meals.postWorkout.when.includes("30 分钟"));
   assert.equal(p.meals.meals.length, 4);
-  assert.equal(p.meals.shopping.length, 9);
+  assert.ok(p.meals.shopping.length >= 12);
   assert.equal(p.meals.channels.length, 4);
   assert.equal(p.meals.gear.length, 6);
-  // 鸡胸周量与蛋白目标挂钩（108g 蛋白 → 约 1.4kg/周）
+  // 鸡胸周量与蛋白目标挂钩（120g 蛋白 → 约 1.6kg/周）
   assert.match(p.meals.shopping[0].amount, /1\.\d+kg/);
 });
 

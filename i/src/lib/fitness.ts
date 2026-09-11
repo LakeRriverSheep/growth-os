@@ -1,6 +1,9 @@
 // 健身计划生成引擎 v4
 // 结构参考 Strong / JeFit / 健身助手：部位日 × 起始重量 × 用户自选动作 × 练前练后餐
 
+// 带 .ts 后缀：Node 原生跑单测（node --experimental-strip-types tests/*.test.ts）时才能解析
+import { buildDietPlan, type DietPlan } from "./diet.ts";
+
 export type FitnessInput = {
   targets: string[];
   parts: string[]; // 想练的部位，按点击顺序 = 每周训练顺序（空 = 自动分化）
@@ -70,9 +73,13 @@ export type FitnessPlan = {
     targetLabel: string;
     protein: number;
     carb: number;
+    /** 休息日碳水参考值（训练日吃 carb） */
+    carbRest: number;
     fat: number;
     note: string;
   };
+  /** 三餐食材搭配（早/中/晚 按宏量营养素拆开的选项 + 推荐组合） */
+  diet: DietPlan;
   meals: MealPlan;
   warmup: string[];
   schedule: DayPlan[];
@@ -646,55 +653,68 @@ function nutrition(f: FitnessInput) {
     note = `每天盈余 250 大卡，增重控制在每月 1kg内——多出来的只会是脂肪。体重不涨两周，再加 100 大卡。`;
   }
 
-  const protein = Math.round(kg * 1.8);
-  const fat = Math.round(kg * 0.8);
-  const carb = Math.max(80, Math.round((targetKcal - protein * 4 - fat * 9) / 4));
+  // 蛋白 2.0g/kg（增肌减脂期上限档）；脂肪 0.8g/kg 且不低于 45g（激素 + 脂溶性维生素保底）
+  const protein = Math.round(kg * 2.0);
+  const fat = Math.max(45, Math.round(kg * 0.8));
+  // 碳水：按热量余量算，但封顶 4g/kg（训练日档位）——避免「余量全是碳水」把热量吃满、赤字清零
+  const carbCap = Math.round(kg * 4.0);
+  const carbRest = Math.round(kg * 3.0);
+  const residual = Math.round((targetKcal - protein * 4 - fat * 9) / 4);
+  const carb = Math.max(100, Math.min(residual, carbCap));
 
-  return { bmr, tdee, targetKcal, targetLabel, protein, carb, fat, note };
+  return { bmr, tdee, targetKcal, targetLabel, protein, carb, carbRest, fat, note };
 }
 
 // ---------- 健身餐 / 采购 / 厨具 ----------
-function mealPlan(f: FitnessInput, macros: ReturnType<typeof nutrition>): MealPlan {
+// 一餐的推荐组合拍平成文本行（兜底展示用；前端展示的是完整的食材搭配卡）
+function comboLines(m: DietPlan["meals"][number]): string[] {
+  return [
+    `推荐组合：${m.combo.label}`,
+    `合计：≈${m.combo.total.kcal}kcal · 蛋白 ${m.combo.total.p}g / 碳水 ${m.combo.total.c}g / 脂肪 ${m.combo.total.f}g`,
+    `本餐目标：≈${m.target.kcal}kcal · 蛋白 ${m.target.p}g / 碳水 ${m.target.c}g / 脂肪 ${m.target.f}g`,
+    `换着吃：${m.groups.find((g) => g.role === "蛋白")?.options.map((o) => `${o.name} ${o.portion}`).join(" / ") ?? ""}`,
+  ];
+}
+
+function mealPlan(f: FitnessInput, macros: ReturnType<typeof nutrition>, diet: DietPlan): MealPlan {
   const P = macros.protein;
-  const wantCut = f.targets.includes("减脂") && !f.targets.includes("增肌");
 
   const chickenDaily = Math.round(((P * 0.4) / 21) * 100 / 50) * 50;
   const chickenWeekly = Math.round((chickenDaily * 7) / 100) / 10;
-  const lunchG = chickenDaily >= 200 ? 150 : 100;
 
   return {
     preWorkout: {
-      when: "练前 60-90 分钟",
-      items: [
-        "香蕉 1 根 + 全麦面包 1 片（快碳供能）",
-        "或燕麦 40g 冲泡 + 鸡蛋 1 个",
-        "别吃撑，七成饱，练时胃不能胀",
-      ],
+      when: diet.pre.when,
+      items: diet.pre.items,
     },
     postWorkout: {
-      when: "练后 30-60 分钟内（最重要的一餐）",
-      items: [
-        `蛋白质 30g+：鸡胸 150g 或 鸡蛋 3 个 + 牛奶 250ml（或蛋白粉 1 勺）`,
-        `碳水 40-60g：米饭 1 碗 / 红薯 200g${wantCut ? "（减脂期碳水减半，蛋白不减）" : ""}`,
-        "这餐吃不好，今天训练效果打 6 折",
-      ],
+      when: diet.post.when,
+      items: diet.post.items,
     },
+    // 早/中/晚 由「食材搭配」单一口径生成（前端展示的是搭配卡，这几行只作兜底文本）
     meals: [
-      { name: "早餐", items: ["鸡蛋 2 个 + 燕麦 50g", "牛奶 250ml", "香蕉或苹果 1 个"] },
-      { name: "午餐", items: [`鸡胸/牛肉 ${lunchG}g`, "米饭 1-1.5 碗", "蔬菜不限量（西兰花/菠菜）"] },
-      { name: "加餐（下午）", items: ["希腊酸奶 1 杯 或 鸡蛋白 2 个", "坚果一小把（10g，别多抓）"] },
-      { name: "晚餐", items: [`鸡胸/鱼虾 ${lunchG}g`, "红薯 150g 或 米饭半碗", "蔬菜不限量"] },
+      { name: "早餐", items: comboLines(diet.meals[0]) },
+      { name: "午餐", items: comboLines(diet.meals[1]) },
+      { name: "加餐（下午）", items: diet.snack.items },
+      { name: "晚餐", items: comboLines(diet.meals[2]) },
     ],
     shopping: [
-      { item: "鸡胸肉（冷冻）", amount: `${chickenWeekly}kg / 周`, note: "山姆/麦德龙囤一个月更划算" },
-      { item: "鸡蛋", amount: "14 个 / 周", note: "每天 2 个，最便宜的蛋白来源" },
-      { item: "燕麦", amount: "500g / 2 周", note: "无糖即食款，练前餐主力" },
-      { item: "红薯", amount: "1kg / 周", note: "电饭煲一锅蒸，练后慢碳" },
-      { item: "大米", amount: "常备", note: "按碳水目标增减" },
-      { item: "西兰花/菠菜", amount: "2kg / 周", note: "体积占半盘，撑饱不超标" },
-      { item: "香蕉", amount: "7 根 / 周", note: "练前 1 根，快碳" },
-      { item: "牛奶", amount: "1.5L / 周", note: "全脂，每天 250ml" },
-      { item: "希腊酸奶", amount: "4 杯 / 周", note: "无糖高蛋白，下午加餐" },
+      { item: "鸡胸肉（冷冻）", amount: `${chickenWeekly}kg / 周`, note: "按 100g 分装压平，解冻快 3 倍；山姆/麦德龙囤一个月更划算" },
+      { item: "虾仁（冷冻）", amount: "1kg / 周", note: "蛋白高脂肪低，晚餐主力；已买，两周补一次" },
+      { item: "鸡蛋", amount: "21 个 / 周", note: "早餐 3 个全蛋，最便宜的蛋白 + 脂肪来源" },
+      { item: "瘦牛肉（牛腱/里脊）+ 龙利鱼", amount: "各 1kg / 周", note: "和鸡胸轮换吃，避免吃腻；分装冷冻" },
+      { item: "即食鸡胸", amount: "4 袋 / 周", note: "应急兜底，别当主力（钠高）" },
+      { item: "北豆腐 / 豆干", amount: "2 盒 / 周", note: "植物蛋白换口味" },
+      { item: "燕麦", amount: "500g / 2 周", note: "无糖即食款，早餐 + 练前主力" },
+      { item: "大米 / 熟饭分装", amount: "常备", note: "周日煮一周，150g 一份冷冻" },
+      { item: "红薯", amount: "2kg / 周", note: "晚餐 300g 慢碳，电饭煲一锅蒸" },
+      { item: "全麦面包 / 贝果", amount: "1 袋 / 周", note: "赶时间时的碳水替换" },
+      { item: "西兰花 + 彩椒", amount: "各 1kg / 周", note: "新买的两样，每餐半盘；洗好沥干用厨房纸包" },
+      { item: "菠菜 / 生菜 / 黄瓜 / 番茄", amount: "常备", note: "凑蔬菜体积，撑饱不超标" },
+      { item: "香蕉 + 苹果", amount: "各 7 个 / 周", note: "香蕉练前 1 根快碳；香蕉不冷藏" },
+      { item: "全脂牛奶", amount: "1.75L / 周", note: "每天 250ml，训练日 +8g 蛋白" },
+      { item: "无糖希腊酸奶", amount: "4 杯 / 周", note: "下午加餐，缺蛋白时补" },
+      { item: "坚果（每日坚果）", amount: "1 盒 / 2 周", note: "一天最多 10g，别整包抓" },
     ],
     channels: [
       { name: "钱大妈 / 社区菜市场", why: "鸡胸鸡蛋当日买，最便宜，晚上 8 点后打折" },
@@ -761,6 +781,7 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
   const kg = parseFloat(f.profile.weight) || 65;
   const gender = f.profile.gender;
   const macros = nutrition(f);
+  const diet = buildDietPlan(macros);
   const exp = f.profile.exp;
 
   const useGym = f.places.includes("健身房");
@@ -858,7 +879,7 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
 
   const notes: string[] = [
     "渐进超负荷：同样的动作，每周比上周多重 2.5kg 或多做 1-2 次，记进记录页——这是进步的唯一证据。",
-    `蛋白质 ${macros.protein}g 分 4 餐吃（每餐 ≈${Math.round(macros.protein / 4)}g），练后那餐必须含 30g+。`,
+    `吃法：不按「每天固定菜单」，按三餐食材搭配拼——每餐「蛋白 1 份 + 碳水 1 份 + 蔬菜管饱 + 脂肪按需」。蛋白封顶 ${macros.protein}g、碳水训练日 ≈${macros.carb}g / 休息日 ≈${macros.carbRest}g、脂肪 ≥${macros.fat}g。`,
     "每天喝水 = 体重(kg) × 35ml，够 7.5 小时。这两条做不到，吃练计划全白搭。",
   ];
 
@@ -909,7 +930,8 @@ export function generateFitnessPlan(f: FitnessInput): FitnessPlan {
       customPicks,
     },
     macros,
-    meals: mealPlan(f, macros),
+    diet,
+    meals: mealPlan(f, macros, diet),
     warmup,
     schedule,
     progression: [

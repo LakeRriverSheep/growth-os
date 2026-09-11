@@ -3,6 +3,9 @@ import Link from "next/link";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FitnessPlan, DayPlan, Exercise, MealPlan } from "@/lib/fitness";
+import type { DietPlan } from "@/lib/diet";
+import { buildDietPlan } from "@/lib/diet";
+import { MealPairCard, DietSummaryTable, FoodLibrarySection } from "./_components/MealPairCard";
 import { coursesOf, type Course } from "@/lib/schedule";
 
 const ALL_DAYS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -37,12 +40,6 @@ type CheckCtx = {
 // 兜底：无上下文时的空实现（不影响渲染）
 const NOOP_CHECK: CheckCtx = { get: () => false, toggle: () => {} };
 
-// 饮食清单（每条可勾选 + 可增删改）读写上下文，由 PlanView 注入，落库 diet_overrides
-type DietCtx = {
-  items: (section: string, fallback: string[]) => string[];
-  save: (section: string, items: string[]) => void;
-};
-
 // 可勾选的一行：热身步骤 / 餐内每一条
 function CheckRow({ item, ctx, num, children }: { item: string; ctx: CheckCtx; num?: number; children: React.ReactNode }) {
   const checked = ctx.get(item);
@@ -67,19 +64,6 @@ function CheckRow({ item, ctx, num, children }: { item: string; ctx: CheckCtx; n
   );
 }
 
-const DEFAULT_BREAKFAST = ["鸡蛋 2 个 + 燕麦 50g", "牛奶 250ml", "香蕉或苹果 1 个"];
-const DEFAULT_LUNCH = ["鸡胸/牛肉 150g", "米饭 1-1.5 碗", "蔬菜不限量"];
-const DEFAULT_SNACK = ["希腊酸奶 1 杯 或 鸡蛋白 2 个", "坚果一小把（10g）"];
-const DEFAULT_DINNER = ["鸡胸/鱼虾 150g", "红薯 150g 或 米饭半碗", "蔬菜不限量"];
-const DEFAULT_PREMEAL = [
-  "黑燕麦 50g 煮（或 40g 燕麦 + 全麦面包 1 片）",
-  "全麦面包 1 片（48g）",
-  "鸡蛋 2 个（水煮 / 少油煎）",
-  "香蕉 1 根（练前快碳）",
-  "蛋白粉半勺（15g）随餐或冲燕麦",
-];
-const DEFAULT_POST = ["蛋白质 30g+：鸡胸 150g 或 鸡蛋 3 个 + 牛奶 250ml（或蛋白粉 1 勺）", "碳水 40-60g：米饭 1 碗 / 红薯 200g", "这餐吃不好，今天训练效果打 6 折"];
-
 // 默认时间线节点在「删除后恢复」时的展示名
 const NODE_LABELS: Record<string, string> = {
   wake: "起床",
@@ -93,101 +77,36 @@ const NODE_LABELS: Record<string, string> = {
   dinner: "晚餐",
 };
 
+// 只读提示卡：练前 / 练后 / 加餐这类短指引，内容来自 plan.diet（改内容改 src/lib/diet.ts）
 function MealCard({
   title,
   when,
   items,
   accent,
   check,
-  diet,
 }: {
   title: string;
   when?: string;
   items: string[];
   accent?: boolean;
-  /** 传入后该餐的每一条都可勾选，prefix 需在当天内唯一 */
+  /** 传入后卡片底部加一个「这条做完了」勾选，prefix 需在当天内唯一 */
   check?: CheckCtx & { prefix: string };
-  /** 传入后支持“增删改”每条：section 为该餐唯一键 */
-  diet?: { section: string; fallback: string[]; ctx: DietCtx };
 }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<string[]>(items);
-  const resolved = diet ? diet.ctx.items(diet.section, diet.fallback) : items;
-  const editable = !!diet;
-
-  function startEdit() {
-    setDraft(resolved);
-    setEditing(true);
-  }
-  function saveEdit() {
-    const next = draft.map((s) => s.trim()).filter(Boolean);
-    setEditing(false);
-    if (diet && JSON.stringify(next) !== JSON.stringify(resolved)) diet.ctx.save(diet.section, next);
-  }
-  const inputCls =
-    "w-full flex-1 rounded-md border border-zinc-800 bg-zinc-950/70 px-2 py-1 text-xs text-zinc-200 outline-none focus:border-emerald-600";
-
   return (
     <div className={`rounded-2xl border p-3.5 ${accent ? "border-emerald-700/50 bg-emerald-950/20" : "border-zinc-800 bg-zinc-900/50"}`}>
       <div className="flex items-baseline justify-between gap-2">
         <span className={`text-xs font-semibold ${accent ? "text-emerald-400" : "text-zinc-200"}`}>{title}</span>
-        {editing ? (
-          <span className="flex shrink-0 items-center gap-2 text-[10px]">
-            <button onClick={saveEdit} className="rounded-full bg-emerald-600 px-2 py-0.5 text-white">
-              完成
-            </button>
-            <button onClick={() => setEditing(false)} className="text-zinc-500 hover:text-zinc-300">
-              取消
-            </button>
-          </span>
-        ) : (
-          <>
-            {when && <span className="text-[10px] text-zinc-500">{when}</span>}
-            {editable && (
-              <button onClick={startEdit} className="shrink-0 text-[10px] text-zinc-500 hover:text-emerald-400">
-                ✎ 改清单
-              </button>
-            )}
-          </>
-        )}
+        {when && <span className="shrink-0 text-[10px] text-zinc-500">{when}</span>}
       </div>
-
-      {editing ? (
-        <div className="mt-2 space-y-1.5">
-          {draft.map((it, i) => (
-            <div key={i} className="flex items-center gap-1.5">
-              <input
-                value={it}
-                onChange={(e) => setDraft((d) => d.map((x, j) => (j === i ? e.target.value : x)))}
-                className={inputCls}
-              />
-              <button
-                onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}
-                aria-label="删除这一条"
-                className="shrink-0 rounded-md border border-zinc-800 px-1.5 py-1 text-[10px] text-red-400/90 hover:border-red-700"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-          <button
-            onClick={() => setDraft((d) => [...d, ""])}
-            className="w-full rounded-md border border-dashed border-zinc-700 py-1 text-[11px] text-zinc-400 hover:border-emerald-600 hover:text-emerald-400"
-          >
-            ＋ 添加一条
-          </button>
-        </div>
-      ) : (
-        <ul className="mt-2 space-y-1.5">
-          {resolved.map((it, i) => (
-            <li key={`${it}-${i}`}>
-              <CheckRow item={`${check?.prefix ?? "meal"}:${it}`} ctx={check ?? NOOP_CHECK}>
-                {it}
-              </CheckRow>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className="mt-2 space-y-1.5">
+        {items.map((it, i) => (
+          <li key={`${it}-${i}`}>
+            <CheckRow item={`${check?.prefix ?? "meal"}:${it}`} ctx={check ?? NOOP_CHECK}>
+              {it}
+            </CheckRow>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -356,31 +275,24 @@ function timeMin(t: string): number {
   return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
 }
 
-// 中餐/加餐/晚餐 三张共用餐卡的内容（供训练日/休息日各自的节点使用）
-function SharedMealCard({
-  meals,
-  section,
-  keyName,
-  title,
-  check,
+// 早/中/晚共用一张搭配卡：内容来自 plan.diet，改食材改 src/lib/diet.ts
+function PairMealCard({
   diet,
+  keyName,
+  check,
 }: {
-  meals: MealPlan;
-  section: string;
-  keyName: "lunch" | "snack" | "dinner";
-  title: string;
+  diet: DietPlan;
+  keyName: "breakfast" | "lunch" | "dinner";
   check?: CheckCtx;
-  diet?: DietCtx;
 }) {
-  const fallback =
-    keyName === "lunch" ? DEFAULT_LUNCH : keyName === "snack" ? DEFAULT_SNACK : DEFAULT_DINNER;
-  const items = meals.meals.find((m) => m.name.includes(section))?.items ?? fallback;
+  const meal = diet.meals.find((m) => m.key === keyName) ?? diet.meals[0];
+  const item = `pair:${keyName}`;
   return (
-    <MealCard
-      title={title}
-      items={items}
-      check={check ? { ...check, prefix: keyName } : undefined}
-      diet={diet ? { section: keyName, fallback: items, ctx: diet } : undefined}
+    <MealPairCard
+      meal={meal}
+      doneItem={item}
+      doneChecked={check?.get(item)}
+      onToggleDone={check ? () => check.toggle(item) : undefined}
     />
   );
 }
@@ -819,23 +731,24 @@ function ExerciseRow({ ex, dateIso }: { ex: Exercise; dateIso: string }) {
 function TrainingDay({
   day,
   meals,
+  diet,
   warmup,
   stairClimber,
   dateIso,
   done,
   check,
-  diet,
   week,
   onSetDone,
 }: {
   day: DayPlan;
   meals: MealPlan;
+  /** 三餐食材搭配（早/中/晚） */
+  diet: DietPlan;
   warmup: string[];
   stairClimber: MealPlan["stairClimber"];
   dateIso: string;
   done: boolean;
   check?: CheckCtx;
-  diet?: DietCtx;
   week: WeekHandle;
   onSetDone: (next: boolean) => Promise<boolean>;
 }) {
@@ -854,8 +767,6 @@ function TrainingDay({
     if (!ok) setSaveErr(true);
     setSaving(false);
   }
-
-  const ed = (section: string, fallback: string[]) => (diet ? { section, fallback, ctx: diet } : undefined);
 
   // 时间线 = 默认节点（可改时间/删除）+ 自定义事项，统一按时间排序
   const nodes: { key: string; time: string; min: number; seq: number; el: React.ReactElement }[] = [];
@@ -893,19 +804,16 @@ function TrainingDay({
 
   push("wake", "05:00", 1, "起床", <p className="text-[11px] text-zinc-500">洗漱 + 200ml 水</p>);
 
-  // 早餐和练前吃合并为一餐（练前 30-60 分钟吃），不再分开两张卡
+  // 早餐和练前吃合并为一餐（练前 60 分钟吃），搭配卡 + 练前额外要点
   push(
     "breakfast",
     "05:30",
     2,
-    "早餐 + 练前吃（练前 30-60 分钟）",
-    <MealCard
-      title="🍳 早餐 + 练前吃"
-      when={meals.preWorkout.when}
-      items={diet ? diet.items("premeal", DEFAULT_PREMEAL) : DEFAULT_PREMEAL}
-      check={check ? { ...check, prefix: "premeal" } : undefined}
-      diet={ed("premeal", DEFAULT_PREMEAL)}
-    />,
+    "早餐 + 练前吃（练前 60 分钟）",
+    <div className="space-y-2">
+      <PairMealCard diet={diet} keyName="breakfast" check={check} />
+      <MealCard title="🕐 练前额外注意" when={meals.preWorkout.when} items={meals.preWorkout.items} />
+    </div>,
   );
 
   push(
@@ -942,25 +850,28 @@ function TrainingDay({
     <MealCard
       title="🍗 练后吃"
       when={meals.postWorkout.when}
-      items={meals.postWorkout.items ?? DEFAULT_POST}
+      items={meals.postWorkout.items}
       accent
       check={check ? { ...check, prefix: "post" } : undefined}
-      diet={ed("post", meals.postWorkout.items ?? DEFAULT_POST)}
     />,
   );
 
-  push("lunch", DAY_TIMES.lunch, 6, "中餐", (
-    <SharedMealCard meals={meals} section="午餐" keyName="lunch" title="🍚 中餐" check={check} diet={diet} />
-  ));
-  push("snack", DAY_TIMES.snack, 7, "下午加餐", (
-    <SharedMealCard meals={meals} section="加餐" keyName="snack" title="🥛 下午加餐" check={check} diet={diet} />
-  ));
+  push("lunch", DAY_TIMES.lunch, 6, "中餐", <PairMealCard diet={diet} keyName="lunch" check={check} />);
+  push(
+    "snack",
+    DAY_TIMES.snack,
+    7,
+    diet.snack.title,
+    <MealCard
+      title={`🥛 ${diet.snack.title}`}
+      items={diet.snack.items}
+      check={check ? { ...check, prefix: "snack" } : undefined}
+    />,
+  );
   push("stair", DAY_TIMES.stair, 8, `爬楼机 · ${stairClimber.durationMin} 分钟`, (
     <StairClimberCard stairClimber={stairClimber} />
   ));
-  push("dinner", DAY_TIMES.dinner, 9, "晚餐", (
-    <SharedMealCard meals={meals} section="晚餐" keyName="dinner" title="🥗 晚餐" check={check} diet={diet} />
-  ));
+  push("dinner", DAY_TIMES.dinner, 9, "晚餐", <PairMealCard diet={diet} keyName="dinner" check={check} />);
 
   // 课表：按星期几自动进入当天时间线（只读，改课表去 src/lib/schedule.ts）
   coursesOf(week.day).forEach((c, i) => {
@@ -1072,9 +983,19 @@ function TrainingDay({
   );
 }
 
-function RestDay({ meals, warmup, stairClimber, check, diet, week }: { meals: MealPlan; warmup: string[]; stairClimber: MealPlan["stairClimber"]; check?: CheckCtx; diet?: DietCtx; week: WeekHandle }) {
-  const breakfastItems = meals.meals.find((m) => m.name.includes("早餐"))?.items ?? DEFAULT_BREAKFAST;
-  const ed = (section: string, fallback: string[]) => (diet ? { section, fallback, ctx: diet } : undefined);
+function RestDay({
+  diet,
+  warmup,
+  stairClimber,
+  check,
+  week,
+}: {
+  diet: DietPlan;
+  warmup: string[];
+  stairClimber: MealPlan["stairClimber"];
+  check?: CheckCtx;
+  week: WeekHandle;
+}) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [insertKey, setInsertKey] = useState<string | null>(null);
   const [insertTime, setInsertTime] = useState("06:00");
@@ -1113,30 +1034,25 @@ function RestDay({ meals, warmup, stairClimber, check, diet, week }: { meals: Me
     });
   };
 
+  push("wake", "08:00", 1, "起床 + 早餐（睡到自然醒）", (
+    <PairMealCard diet={diet} keyName="breakfast" check={check} />
+  ));
+  push("lunch", DAY_TIMES.lunch, 2, "中餐", <PairMealCard diet={diet} keyName="lunch" check={check} />);
   push(
-    "wake",
-    "08:00",
-    1,
-    "起床 + 早餐（睡到自然醒）",
+    "snack",
+    DAY_TIMES.snack,
+    3,
+    diet.snack.title,
     <MealCard
-      title="🍳 早餐"
-      items={breakfastItems}
-      check={check ? { ...check, prefix: "breakfast" } : undefined}
-      diet={ed("breakfast", breakfastItems)}
+      title={`🥛 ${diet.snack.title}`}
+      items={diet.snack.items}
+      check={check ? { ...check, prefix: "snack" } : undefined}
     />,
   );
-  push("lunch", DAY_TIMES.lunch, 2, "中餐", (
-    <SharedMealCard meals={meals} section="午餐" keyName="lunch" title="🍚 中餐" check={check} diet={diet} />
-  ));
-  push("snack", DAY_TIMES.snack, 3, "下午加餐", (
-    <SharedMealCard meals={meals} section="加餐" keyName="snack" title="🥛 下午加餐" check={check} diet={diet} />
-  ));
   push("stair", DAY_TIMES.stair, 4, `爬楼机 · ${stairClimber.durationMin} 分钟`, (
     <StairClimberCard stairClimber={stairClimber} restNote />
   ));
-  push("dinner", DAY_TIMES.dinner, 5, "晚餐", (
-    <SharedMealCard meals={meals} section="晚餐" keyName="dinner" title="🥗 晚餐" check={check} diet={diet} />
-  ));
+  push("dinner", DAY_TIMES.dinner, 5, "晚餐", <PairMealCard diet={diet} keyName="dinner" check={check} />);
 
   // 课表：按星期几自动进入当天时间线（只读，改课表去 src/lib/schedule.ts）
   coursesOf(week.day).forEach((c, i) => {
@@ -1590,40 +1506,17 @@ export default function PlanView({
     },
   };
 
-  // 饮食清单覆盖：每条可增删改，独立存 diet_overrides（重生成计划不会被覆盖）
-  const [dietSections, setDietSections] = useState<Record<string, string[]>>({});
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/plan/diet?goalId=fitness")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { sections?: Record<string, string[]> } | null) => {
-        if (alive && d?.sections && typeof d.sections === "object") setDietSections(d.sections);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
-  const dietCtx: DietCtx = {
-    items: (section, fallback) => {
-      const s = dietSections[section];
-      return s !== undefined ? s : fallback;
-    },
-    save: (section, items) => {
-      const prev = dietSections;
-      const next = { ...prev, [section]: items };
-      setDietSections(next);
-      fetch("/api/plan/diet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goalId: "fitness", sections: next }),
-      })
-        .then((r) => {
-          if (!r.ok) throw new Error("save failed");
-        })
-        .catch(() => setDietSections(prev)); // 失败回滚
-    },
-  };
+  // 兜底：旧版缓存的 macros 没有 carbRest（休息日碳水），别把 undefined 渲染到卡片上
+  const safeMacros = useMemo(
+    () => ({ ...macros, carbRest: macros.carbRest ?? Math.round(macros.carb * 0.75) }),
+    [macros],
+  );
+
+  // 三餐食材搭配：旧缓存计划里没有 diet 字段时，直接用 macros 现场重算（纯函数，不落库）
+  const dietPlan: DietPlan = useMemo(
+    () => plan.diet ?? buildDietPlan(safeMacros),
+    [plan.diet, safeMacros],
+  );
 
   // ---------- 周计划：当前星期几的节点编辑/自定义（自动保存） ----------
   // 用 {day, doc, ready} 结构：渲染时 day 不匹配就视为空，避免跨星期几闪烁
@@ -1870,17 +1763,17 @@ export default function PlanView({
       {/* 当日内容 */}
       <div className="mt-5">
         {dayPlan.type === "休息" ? (
-          <RestDay meals={safeMeals} warmup={warmup} stairClimber={safeMeals.stairClimber} check={checkCtx} diet={dietCtx} week={week} />
+          <RestDay diet={dietPlan} warmup={warmup} stairClimber={safeMeals.stairClimber} check={checkCtx} week={week} />
         ) : (
           <TrainingDay
             day={dayPlan}
             meals={safeMeals}
+            diet={dietPlan}
             warmup={dayPlan.warmup && dayPlan.warmup.length > 0 ? dayPlan.warmup : warmup}
             stairClimber={safeMeals.stairClimber}
             dateIso={iso}
             done={done}
             check={checkCtx}
-            diet={dietCtx}
             week={week}
             onSetDone={setDayDone}
           />
@@ -1897,14 +1790,39 @@ export default function PlanView({
             <StatCard label="每日消耗 TDEE" value={macros.tdee} unit="kcal" />
             <StatCard label={macros.targetLabel} value={macros.targetKcal} unit="kcal" accent />
           </div>
-          <div className="mt-2.5 grid grid-cols-3 gap-2.5">
-            <StatCard label="蛋白质" value={macros.protein} unit="g" accent />
-            <StatCard label="碳水" value={macros.carb} unit="g" />
-            <StatCard label="脂肪" value={macros.fat} unit="g" />
+          <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+            <StatCard label="蛋白质（目标）" value={safeMacros.protein} unit="g" accent />
+            <StatCard label="脂肪（下限）" value={safeMacros.fat} unit="g" />
+          </div>
+          <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+            <StatCard label="碳水 · 训练日" value={safeMacros.carb} unit="g" />
+            <StatCard label="碳水 · 休息日" value={safeMacros.carbRest} unit="g" />
           </div>
           <p className="mt-3 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3 text-xs leading-5 text-zinc-400">
             {macros.note}
           </p>
+        </>
+      )}
+
+      {/* 三餐食材搭配合计 + 硬规则（每天都看得到，替代原来的逐条饮食清单） */}
+      <h2 className="mt-10 text-base font-semibold text-zinc-100">🥗 三餐食材搭配</h2>
+      <p className="mt-1 px-1 text-[11px] leading-5 text-zinc-500">
+        不排每天菜单：每餐按「蛋白 1 份 + 碳水 1 份 + 蔬菜管饱 + 脂肪按需」从自己的食材库里拼。
+      </p>
+      <div className="mt-3">
+        <DietSummaryTable plan={dietPlan} />
+      </div>
+
+      {/* 食材库（完整清单，只在完整计划页展开，首页保持精简） */}
+      {showHeader && (
+        <>
+          <h2 className="mt-10 text-base font-semibold text-zinc-100">🧊 我的食材库</h2>
+          <p className="mt-1 px-1 text-[11px] leading-5 text-zinc-500">
+            括号里是每份的 P/C/F 与热量，换着吃不改量级就行。带「新」的是最近新买的。
+          </p>
+          <div className="mt-3">
+            <FoodLibrarySection />
+          </div>
         </>
       )}
     </div>

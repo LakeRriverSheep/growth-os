@@ -53,12 +53,40 @@ export async function GET(req: NextRequest) {
 
   if (!row) return NextResponse.json(null);
 
+  const answers = JSON.parse((row.answers as string) || "{}") as Record<string, string>;
+  const plan = JSON.parse((row.plan as string) || "[]");
+
+  // 老版缓存计划自动升级：健身计划缺 diet / carbRest 说明是改版前生成的，
+  // 用已存的 answers 现场重算一遍并写回，用户无感（不用手动重新填写）
+  if (goalId === "fitness" && isStaleFitnessPlan(plan)) {
+    try {
+      const upgraded = generateFitnessPlan(answers as unknown as FitnessInput);
+      await savePlan(goalId, answers, upgraded, "fitness-calc");
+      return NextResponse.json({
+        answers,
+        plan: upgraded,
+        source: "fitness-calc",
+        updatedAt: row.updated_at,
+        upgraded: true,
+      });
+    } catch {
+      // 重算失败就退回旧计划，别把页面搞崩
+    }
+  }
+
   return NextResponse.json({
-    answers: JSON.parse((row.answers as string) || "{}"),
-    plan: JSON.parse((row.plan as string) || "[]"),
+    answers,
+    plan,
     source: row.source,
     updatedAt: row.updated_at,
   });
+}
+
+/** 改版前生成的健身计划（缺三餐搭配 / 营养口径旧）需要重算 */
+function isStaleFitnessPlan(plan: unknown): boolean {
+  if (!plan || typeof plan !== "object") return true;
+  const p = plan as { diet?: unknown; macros?: { carbRest?: unknown } };
+  return !p.diet || p.macros?.carbRest === undefined;
 }
 
 export async function POST(req: NextRequest) {
