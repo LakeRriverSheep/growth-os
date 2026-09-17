@@ -1,6 +1,8 @@
 // 26软件工程（专升本）· 2026-2027学年第1学期课表
 // 来源：班级课表（26.9.4）.xlsx → Sheet1 → 行「26软件工程（专升本）」
-// 课表按星期几重复，不区分单双周（单双周信息只作为备注显示在卡片上）
+// 课表按星期几重复；单双周写在 weeks 字段里（如 "4-18双"），由 courseOnWeek 过滤
+
+import { termWeek, weekdayCn } from "./date.ts";
 
 export type Course = {
   id: string;
@@ -61,4 +63,39 @@ export const PRACTICE_NOTE = "实践课程：JAVA 程序开发实训（黄勇，
 /** 取某一天的课程，按开始时间升序 */
 export function coursesOf(day: string): Course[] {
   return CLASS_SCHEDULE.filter((c) => c.day === day).sort((a, b) => a.start.localeCompare(b.start));
+}
+
+/** 课程卡片上显示的周次备注 */
+export function weeksLabel(c: Course): string {
+  const { from, to, parity } = parseWeeks(c.weeks);
+  return `${from}-${to} 周${parity === 1 ? "（单）" : parity === 2 ? "（双）" : ""}`;
+}
+
+/** 解析周次字段："3-19" | "4-18双" | "3-9单" → parity 0=每周 1=单周 2=双周 */
+export function parseWeeks(weeks: string): { from: number; to: number; parity: 0 | 1 | 2 } {
+  const m = /^(\d+)\s*[-–~]\s*(\d+)\s*(单|双)?/.exec(weeks.trim());
+  if (!m) return { from: 1, to: 99, parity: 0 };
+  return {
+    from: Number(m[1]),
+    to: Number(m[2]),
+    parity: m[3] === "单" ? 1 : m[3] === "双" ? 2 : 0,
+  };
+}
+
+/** 该课程在第 week 周是否要上 */
+export function courseOnWeek(c: Course, week: number): boolean {
+  const { from, to, parity } = parseWeeks(c.weeks);
+  if (week < from || week > to) return false;
+  if (parity === 1 && week % 2 === 0) return false;
+  if (parity === 2 && week % 2 === 1) return false;
+  return true;
+}
+
+/** 某一天（YYYY-MM-DD）实际要上的课：按星期匹配 + 周次/单双周过滤 */
+export function coursesOnDate(date: string): Course[] {
+  const week = termWeek(date);
+  const day = weekdayCn(date);
+  return CLASS_SCHEDULE.filter((c) => c.day === day && courseOnWeek(c, week)).sort((a, b) =>
+    a.start.localeCompare(b.start),
+  );
 }

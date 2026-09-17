@@ -24,3 +24,41 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ── 周计划日历 ─────────────────────────────────────────────
+   日列宽度：手机一屏一天（左右滑动切换），桌面 7 列均分铺满。
+   时间区高度：手机给足高度可纵向滚动；桌面交给 flex 撑满，
+   05:00–23:00 共 18 格正好落进一屏，不用滚动。 */
+.planner-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(63 63 70) transparent;
+}
+
+/* 整点横线：每 1/18 高度一条 */
+.planner-gridlines {
+  background-image: linear-gradient(to bottom, rgb(39 39 42 / 0.9) 0 1px, transparent 1px);
+  background-size: 100% calc(100% / 18);
+}
+
+.planner-col {
+  flex: 0 0 calc(100vw - 3rem);
+  min-width: 0;
+}
+
+.planner-daygrid {
+  flex: 1 1 auto;
+  min-height: calc(3.5rem * 18);
+}
+
+@media (min-width: 768px) {
+  .planner-col {
+    flex: 1 1 0;
+  }
+  /* 前后缓冲的那一周只服务于手机横滑，桌面隐藏 */
+  .planner-col--buffer {
+    display: none;
+  }
+  .planner-daygrid {
+    min-height: 0;
+  }
+}

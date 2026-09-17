@@ -72,6 +72,21 @@ const SCHEMA = `
     checked INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now', 'localtime'))
   );
+
+  -- 周计划日历里自己排的日程；weekly=1 表示每周重复（date 只用来确定星期几）
+  CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL DEFAULT '',
+    start TEXT NOT NULL DEFAULT '',
+    end TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT 'life',
+    note TEXT DEFAULT '',
+    weekly INTEGER DEFAULT 0,
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);
 `;
 
 type SqlValue = string | number | null;
