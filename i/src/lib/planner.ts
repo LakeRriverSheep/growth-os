@@ -7,47 +7,52 @@ export type EventKind = "class" | "train" | "study" | "life";
 
 export const KIND_LIST: EventKind[] = ["class", "train", "study", "life"];
 
+/**
+ * 四个分类的配色。日程块走「实心色块」而不是半透明淡底：
+ * 15% 透明的底在纯黑上几乎看不出边界，而且网格线会直接穿透块内部。
+ * 实心填充 + 四周 1px 描边 + 左侧 4px 主色条，边界在任何背景上都立得住。
+ */
 export const KIND_META: Record<
   EventKind,
   {
     label: string;
-    /** 小圆点（选择器） */
+    /** 高饱和主色：选择器小圆点 + 日程块左侧色条 */
     dot: string;
-    /** 选中态（选择器） */
+    /** 选择器选中态 */
     soft: string;
-    /** 块底：淡色 + hover 提亮 */
+    /** 日程块填充：不透明深色（黑底上边界可见）+ hover 提亮 */
     bg: string;
-    /** 块左侧色条 */
-    bar: string;
+    /** 日程块四周描边：同色系半透明，负责把块的轮廓勾出来 */
+    edge: string;
   }
 > = {
   class: {
     label: "课程",
     dot: "bg-sky-400",
-    soft: "border-sky-500 bg-sky-500/20 text-sky-100",
-    bg: "bg-sky-500/15 hover:bg-sky-500/25",
-    bar: "border-sky-400/80",
+    soft: "border-sky-400/70 bg-[#0f3a56] text-sky-50",
+    bg: "bg-[#0f3a56] hover:bg-[#154d70]",
+    edge: "border-sky-400/40",
   },
   train: {
     label: "训练",
     dot: "bg-emerald-400",
-    soft: "border-emerald-500 bg-emerald-500/20 text-emerald-100",
-    bg: "bg-emerald-500/15 hover:bg-emerald-500/25",
-    bar: "border-emerald-400/80",
+    soft: "border-emerald-400/70 bg-[#0a3f2e] text-emerald-50",
+    bg: "bg-[#0a3f2e] hover:bg-[#0d5540]",
+    edge: "border-emerald-400/40",
   },
   study: {
     label: "学习",
     dot: "bg-amber-400",
-    soft: "border-amber-500 bg-amber-500/20 text-amber-100",
-    bg: "bg-amber-500/15 hover:bg-amber-500/25",
-    bar: "border-amber-400/80",
+    soft: "border-amber-400/70 bg-[#3e2c08] text-amber-50",
+    bg: "bg-[#3e2c08] hover:bg-[#543b0b]",
+    edge: "border-amber-400/40",
   },
   life: {
     label: "生活",
     dot: "bg-violet-400",
-    soft: "border-violet-500 bg-violet-500/20 text-violet-100",
-    bg: "bg-violet-500/15 hover:bg-violet-500/25",
-    bar: "border-violet-400/80",
+    soft: "border-violet-400/70 bg-[#2e1b4a] text-violet-50",
+    bg: "bg-[#2e1b4a] hover:bg-[#3d2461]",
+    edge: "border-violet-400/40",
   },
 };
 

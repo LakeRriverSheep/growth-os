@@ -10,12 +10,13 @@ import {
   type PlanEvent,
 } from "@/lib/planner";
 
-/** 整点实线 + 半点虚线；随每小时高度自动缩放 */
+/** 整点实线 + 半点虚线；随每小时高度自动缩放。
+ *  线刻意压暗一档（zinc-800 / zinc-900），把对比度让给日程块。 */
 export function gridBackground(hourH: number) {
   return {
     backgroundImage:
-      "linear-gradient(to bottom, rgb(63 63 70 / 0.95) 0 1px, transparent 1px)," +
-      "linear-gradient(to bottom, rgb(39 39 42 / 0.9) 0 1px, transparent 1px)",
+      "linear-gradient(to bottom, rgb(39 39 42) 0 1px, transparent 1px)," +
+      "linear-gradient(to bottom, rgb(24 24 27) 0 1px, transparent 1px)",
     backgroundSize: `100% ${hourH}px, 100% ${hourH / 2}px`,
   };
 }
@@ -123,7 +124,8 @@ export function DayColumn({
   );
 }
 
-/** 日程块：左侧色条 + 淡色底，标题保持近白以保证可读；
+/** 日程块：实心色块（左侧 4px 主色条 + 四周 1px 描边）。
+ *  不用半透明底——黑底上看不出边界，网格线还会穿透块内部。
  *  行数按块的实际像素高度决定，短块只留一行、长块才铺满三行。 */
 function TimeBlock({
   b,
@@ -147,32 +149,35 @@ function TimeBlock({
     <button
       type="button"
       onClick={ev ? () => onEdit(ev) : undefined}
-      className={`absolute z-10 overflow-hidden rounded-[6px] border-l-[3px] px-2 py-[3px] text-left ${meta.bg} ${
-        meta.bar
+      className={`absolute z-10 overflow-hidden rounded-[6px] border pl-[10px] pr-2 py-[3px] text-left ${meta.bg} ${
+        meta.edge
       } ${ev ? "cursor-pointer" : "cursor-default"}`}
       style={{
         top: `${b.top}%`,
-        height: `calc(${b.height}% - 2px)`,
-        left: `calc(${b.col * w}% + 1px)`,
-        width: `calc(${w}% - 3px)`,
+        height: `calc(${b.height}% - 3px)`,
+        left: `calc(${b.col * w}% + 2px)`,
+        width: `calc(${w}% - 4px)`,
       }}
     >
+      {/* 左侧主色条：独立元素，被块的圆角裁剪，比 border-left 更可控 */}
+      <span className={`pointer-events-none absolute inset-y-0 left-0 w-[4px] ${meta.dot}`} />
+
       {oneLine ? (
         <span className="flex items-baseline gap-1.5 overflow-hidden text-[11px] leading-4">
-          <span className="truncate font-medium text-zinc-50">{b.title}</span>
-          <span className="shrink-0 tabular-nums text-zinc-400">{b.start}</span>
+          <span className="truncate font-semibold text-white">{b.title}</span>
+          <span className="shrink-0 tabular-nums text-white/55">{b.start}</span>
         </span>
       ) : (
         <>
-          <span className="block truncate text-[12px] font-medium leading-4 text-zinc-50">
+          <span className="block truncate text-[12px] font-semibold leading-4 text-white">
             {b.title}
           </span>
-          <span className="block truncate text-[11px] leading-4 tabular-nums text-zinc-400">
+          <span className="block truncate text-[11px] leading-4 tabular-nums text-white/60">
             {b.start}–{b.end}
             {showAll && b.weeks ? ` · ${b.weeks}` : ""}
           </span>
           {showSub && b.sub && (
-            <span className="block truncate text-[11px] leading-4 text-zinc-500">{b.sub}</span>
+            <span className="block truncate text-[11px] leading-4 text-white/45">{b.sub}</span>
           )}
         </>
       )}
