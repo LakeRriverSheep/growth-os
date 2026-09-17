@@ -22,43 +22,44 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Geist 打头，中文回落到系统黑体；数字用 tabular 由各处单独控制 */
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
 /* ── 周计划日历 ─────────────────────────────────────────────
-   日列宽度：手机一屏一天（左右滑动切换），桌面 7 列均分铺满。
-   时间区高度：手机给足高度可纵向滚动；桌面交给 flex 撑满，
-   05:00–23:00 共 18 格正好落进一屏，不用滚动。 */
+   结构（参考 FullCalendar / Google Calendar）：
+     · 表头行在滚动容器之外 —— 永远贴顶，靠 translateX 跟着横向滚动
+     · 一个滚动容器同时管纵向与横向；左侧时间轴 sticky left 钉住
+     · 每小时高度由 JS 按容器高度算（最低 56px），不够就纵向滚动
+   横线画在列背景上：整点实线 + 半点虚线，随 --hour-h 自动缩放。 */
 .planner-scroll {
   scrollbar-width: thin;
-  scrollbar-color: rgb(63 63 70) transparent;
+  scrollbar-color: rgb(63 63 70 / 0.9) transparent;
+  overscroll-behavior: contain;
+}
+.planner-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.planner-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.planner-scroll::-webkit-scrollbar-thumb {
+  background: rgb(63 63 70 / 0.9);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+.planner-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgb(82 82 91 / 0.95);
+  background-clip: content-box;
+}
+.planner-scroll::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
-/* 整点横线：每 1/18 高度一条 */
-.planner-gridlines {
-  background-image: linear-gradient(to bottom, rgb(39 39 42 / 0.9) 0 1px, transparent 1px);
-  background-size: 100% calc(100% / 18);
-}
-
-.planner-col {
-  flex: 0 0 calc(100vw - 3rem);
-  min-width: 0;
-}
-
-.planner-daygrid {
-  flex: 1 1 auto;
-  min-height: calc(3.5rem * 18);
-}
-
-@media (min-width: 768px) {
-  .planner-col {
-    flex: 1 1 0;
-  }
-  /* 前后缓冲的那一周只服务于手机横滑，桌面隐藏 */
-  .planner-col--buffer {
-    display: none;
-  }
-  .planner-daygrid {
-    min-height: 0;
-  }
+/* 表头跟着横向滚动平移，不要过渡动画（要跟手） */
+.planner-headrow {
+  will-change: transform;
 }

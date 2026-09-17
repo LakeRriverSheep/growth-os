@@ -1,25 +1,38 @@
 "use client";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { addDays, mondayOf, monthDayCn, parseYmd, termWeek, todayYmd, weekdayCn } from "@/lib/date";
-import { coursesOnDate } from "@/lib/schedule";
 import {
-  DAY_END_MIN,
-  DAY_START_MIN,
-  HOURS,
-  KIND_META,
-  buildDay,
-  pctTop,
-  type DayBlock,
-  type PlanEvent,
-} from "@/lib/planner";
+  addDays,
+  mondayOf,
+  monthDayCn,
+  parseYmd,
+  termWeek,
+  todayYmd,
+  toMin,
+} from "@/lib/date";
+import { coursesOnDate } from "@/lib/schedule";
+import { DAY_END_MIN, DAY_START_MIN, HOURS, buildDay, type PlanEvent } from "@/lib/planner";
 import EventSheet, { type SheetPayload, type SheetState } from "./EventSheet";
+import { DayColumn, DayHead } from "./DayColumn";
 
-const PAD = 7; // 前后各缓冲一周，手机横滑够用
+/** 前后各缓冲一周：手机上左右滑动时不至于一滑就出头 */
+const PAD = 7;
 const TOTAL = 21;
+const ROWS = HOURS.length; // 05:00–23:00 → 18 格
+const AXIS_W = 56; // 左侧时间轴宽度
+const HEAD_H = 52; // 表头行高度
+const MIN_HOUR = 56; // 每小时最小高度：再挤就让它纵向滚动，不硬塞进一屏
+const MAX_HOUR = 120;
+const NARROW_W = 768; // 窄于此宽度：一屏一天，左右滑动
+
+type Layout = { w: number; h: number; narrow: boolean; hourH: number; sbw: number };
 
 function hourLabel(h: number): string {
   return `${String(h).padStart(2, "0")}:00`;
+}
+
+function hourMinLabel(min: number): string {
+  return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
 }
 
 export default function Planner() {
@@ -29,8 +42,56 @@ export default function Planner() {
   const [events, setEvents] = useState<PlanEvent[]>([]);
   const [version, setVersion] = useState(0);
   const [sheet, setSheet] = useState<SheetState | null>(null);
+  const [layout, setLayout] = useState<Layout>({
+    w: 0,
+    h: 0,
+    narrow: false,
+    hourH: MIN_HOUR,
+    sbw: 0,
+  });
   const [focusIdx, setFocusIdx] = useState(PAD);
-  const scroller = useRef<HTMLDivElement | null>(null);
+
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const resizeObs = useRef<ResizeObserver | null>(null);
+  const headRef = useRef<HTMLDivElement | null>(null);
+  const didPinScroll = useRef(false);
+  const wantDateRef = useRef<string | null>(null);
+
+  // 量容器：宽度决定是否窄屏，高度决定每小时多高。
+  // 用回调 ref 而不是 useLayoutEffect([])：首帧 anchor 还没值、滚动容器尚未挂载，
+  // 一次性 effect 会量到 null 之后再也不会重跑。
+  const attachScroll = useCallback((el: HTMLDivElement | null) => {
+    scrollRef.current = el;
+    resizeObs.current?.disconnect();
+    if (!el) return;
+
+    const measure = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (!w || !h) return;
+      // 纵向滚动条宽度：表头在滚动容器外，要自己留出这条缝才能和正文列对齐
+      const sbw = Math.max(0, el.offsetWidth - el.clientWidth);
+      setLayout((prev) => {
+        const narrow = w < NARROW_W;
+        const hourH = Math.min(MAX_HOUR, Math.max(MIN_HOUR, h / ROWS));
+        if (
+          prev.w === w &&
+          prev.h === h &&
+          prev.narrow === narrow &&
+          prev.hourH === hourH &&
+          prev.sbw === sbw
+        ) {
+          return prev;
+        }
+        return { w, h, narrow, hourH, sbw };
+      });
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    resizeObs.current = ro;
+  }, []);
 
   // 客户端时间：只在挂载后取，避免服务端渲染水合不一致
   useEffect(() => {
@@ -71,30 +132,93 @@ export default function Planner() {
     };
   }, [monday, version]);
 
-  // 切周 → 手机端回到本周第一屏
+  const colW = useMemo(() => {
+    if (!layout.w) return 0;
+    const inner = Math.max(0, layout.w - AXIS_W);
+    return layout.narrow ? Math.max(200, inner) : 0;
+  }, [layout.w, layout.narrow]);
+
+  const contentH = layout.hourH * ROWS;
+
+  /** 桌面上只渲染本周 7 列（横滑交给手机） */
+  const cols = useMemo(
+    () => (layout.narrow ? days : days.slice(PAD, PAD + 7)),
+    [days, layout.narrow],
+  );
+
+  const board = useMemo(
+    () => cols.map((d) => ({ date: d, blocks: buildDay(d, coursesOnDate(d), events) })),
+    [cols, events],
+  );
+
+  /** 本周最早的一个日程开始时间（用于首屏滚动定位） */
+  const earliestMin = useMemo(() => {
+    let m = DAY_END_MIN;
+    for (const { blocks } of board) {
+      for (const b of blocks) m = Math.min(m, toMin(b.start));
+    }
+    return m;
+  }, [board]);
+
+  const jumpTo = useCallback(
+    (min: number, smooth: boolean) => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const target = Math.max(DAY_START_MIN, min);
+      el.scrollTo({
+        top: ((target - DAY_START_MIN) / 60) * layout.hourH,
+        behavior: smooth ? "smooth" : "auto",
+      });
+    },
+    [layout.hourH],
+  );
+
+  // 首屏：把 06:00–07:00 一带顶到最上面，早上第一节课不用往下翻
   useEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
+    if (!layout.h || didPinScroll.current) return;
+    const first = Number.isFinite(earliestMin) ? earliestMin : 7 * 60;
+    jumpTo(Math.min(7 * 60, first - 30), false);
+    didPinScroll.current = true;
+  }, [layout.h, earliestMin, jumpTo]);
+
+  const syncHead = useCallback((sl: number) => {
+    const h = headRef.current;
+    if (h) h.style.transform = sl ? `translateX(${-sl}px)` : "";
+  }, []);
+
+  // 窄屏：切周后回到本周周一那一屏；表头同步平移
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !layout.narrow || !colW) return;
     const raf = requestAnimationFrame(() => {
-      const colW = el.clientWidth;
-      if (colW <= 0 || el.scrollWidth <= el.clientWidth + 2) return;
-      el.scrollLeft = PAD * colW;
-      setFocusIdx(PAD);
+      const want = wantDateRef.current;
+      const idx = want ? days.indexOf(want) : -1;
+      const i = idx >= 0 ? idx : PAD;
+      wantDateRef.current = null;
+      el.scrollLeft = i * colW;
+      setFocusIdx(i);
+      syncHead(el.scrollLeft);
     });
     return () => cancelAnimationFrame(raf);
-  }, [monday]);
+  }, [monday, layout.narrow, colW, days, syncHead]);
 
-  // 横滑 → 记录当前聚焦的列（手机上的标题与翻页按钮跟着走）
+  // 宽屏：没有横向滚动，表头别留位移
   useEffect(() => {
-    const el = scroller.current;
+    if (!layout.narrow) syncHead(0);
+  }, [layout.narrow, syncHead]);
+
+  // 横向滚动：表头跟手平移；只在跨过一整天时才更新状态（避免每帧重渲染）
+  useEffect(() => {
+    const el = scrollRef.current;
     if (!el) return;
     let raf = 0;
     const onScroll = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        const colW = el.clientWidth;
-        if (colW <= 0) return;
-        setFocusIdx(Math.max(0, Math.min(TOTAL - 1, Math.round(el.scrollLeft / colW))));
+        syncHead(el.scrollLeft);
+        if (!layout.narrow || !colW) return;
+        const i = Math.max(0, Math.min(TOTAL - 1, Math.round(el.scrollLeft / colW)));
+        setFocusIdx((prev) => (prev === i ? prev : i));
       });
     };
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -102,14 +226,13 @@ export default function Planner() {
       el.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(raf);
     };
-  }, [monday]);
-
-  const board = useMemo(
-    () => days.map((d) => ({ date: d, blocks: buildDay(d, coursesOnDate(d), events) })),
-    [days, events],
-  );
+  }, [layout.narrow, colW, syncHead]);
 
   const focusDate = days[focusIdx] ?? monday;
+
+  /** 当前时间落在可视范围内时，时间轴上给一个绿标，和列里的时间线对上 */
+  const nowVisible =
+    !!today && cols.includes(today) && nowMin >= DAY_START_MIN && nowMin < DAY_END_MIN;
 
   const openNew = useCallback((date: string, hour: number) => {
     setSheet({
@@ -135,17 +258,32 @@ export default function Planner() {
     setVersion((v) => v + 1);
   }
 
-  /** 手机：按天翻（滑不动就直接换 anchor） */
+  /** 窄屏：按天翻（滑得动就直接滑） */
   function goDay(n: number) {
+    if (!layout.narrow) {
+      setAnchor(addDays(monday, 7 * n));
+      return;
+    }
     const target = addDays(focusDate, n);
-    const el = scroller.current;
+    const el = scrollRef.current;
     const idx = days.indexOf(target);
-    const colW = el ? el.clientWidth : 0;
-    if (el && idx >= 0 && colW > 0 && el.scrollWidth > el.clientWidth + 2) {
+    if (el && idx >= 0 && colW > 0) {
       el.scrollTo({ left: idx * colW, behavior: "smooth" });
       return;
     }
     setAnchor(target);
+  }
+
+  /** 今天：回到本周、切到今天的列、滚到当前时间 */
+  function goToday() {
+    wantDateRef.current = today;
+    setAnchor(today);
+    jumpTo(nowMin >= 0 ? nowMin - 90 : 7 * 60, true);
+    const el = scrollRef.current;
+    const idx = days.indexOf(today);
+    if (el && layout.narrow && idx >= 0 && colW > 0) {
+      el.scrollTo({ left: idx * colW, behavior: "smooth" });
+    }
   }
 
   if (!monday) return <div className="h-[100dvh] bg-zinc-950" />;
@@ -164,40 +302,36 @@ export default function Planner() {
           <span className="hidden text-[11px] text-zinc-600 sm:inline">周计划</span>
         </div>
 
-        {/* 手机：翻天 */}
-        <div className="flex items-center gap-1.5 md:hidden">
-          <button className={btn} onClick={() => goDay(-1)} aria-label="上一天">
+        <div className="flex items-center gap-1.5">
+          <button
+            className={btn}
+            onClick={() => goDay(-1)}
+            aria-label={layout.narrow ? "上一天" : "上一周"}
+          >
             ‹
           </button>
-          <button className={btn} onClick={() => setAnchor(today)}>
+          <button className={btn} onClick={goToday}>
             今天
           </button>
-          <button className={btn} onClick={() => goDay(1)} aria-label="下一天">
+          <button
+            className={btn}
+            onClick={() => goDay(1)}
+            aria-label={layout.narrow ? "下一天" : "下一周"}
+          >
             ›
           </button>
         </div>
 
-        {/* 桌面：翻周 */}
-        <div className="hidden items-center gap-1.5 md:flex">
-          <button className={btn} onClick={() => setAnchor(addDays(monday, -7))} aria-label="上一周">
-            ‹
-          </button>
-          <button className={btn} onClick={() => setAnchor(today)}>
-            今天
-          </button>
-          <button className={btn} onClick={() => setAnchor(addDays(monday, 7))} aria-label="下一周">
-            ›
-          </button>
-        </div>
-
-        <div className="min-w-0 truncate text-sm text-zinc-300 md:hidden">
-          {monthDayCn(focusDate)} {weekdayCn(focusDate)}
-        </div>
-        <div className="hidden min-w-0 truncate text-sm md:block">
-          {md.getFullYear()}年{md.getMonth() + 1}月
-          <span className="mx-1.5 text-zinc-700">·</span>
-          <span className="text-zinc-400">
-            第 {weekNo} 周 {monthDayCn(monday)}–{monthDayCn(addDays(monday, 6))}
+        <div className="min-w-0 truncate text-sm text-zinc-300">
+          <span className="md:hidden">
+            第 {termWeek(focusDate)} 周 · {monthDayCn(focusDate)}
+          </span>
+          <span className="hidden md:inline">
+            {md.getFullYear()}年{md.getMonth() + 1}月
+            <span className="mx-1.5 text-zinc-700">·</span>
+            <span className="text-zinc-400">
+              第 {weekNo} 周 {monthDayCn(monday)}–{monthDayCn(addDays(monday, 6))}
+            </span>
           </span>
         </div>
 
@@ -209,41 +343,85 @@ export default function Planner() {
         </Link>
       </header>
 
-      {/* 主体：外层纵向滚动（时间轴跟着走），日列区独立横向滑动（手机一屏一天） */}
-      <div className="planner-scroll min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-        <div className="flex min-h-full w-full">
-          <aside className="flex w-12 shrink-0 flex-col bg-zinc-950">
-            <div className="h-11 shrink-0 border-b border-zinc-800" />
-            <div className="planner-daygrid relative">
-              {HOURS.map((h) => (
-                <div
-                  key={h}
-                  className="absolute right-1.5 translate-y-[3px] text-[10px] tabular-nums text-zinc-600"
-                  style={{ top: `${pctTop(h * 60)}%` }}
-                >
-                  {h}:00
-                </div>
-              ))}
-            </div>
-          </aside>
-
-          <div
-            ref={scroller}
-            className="flex min-w-0 flex-1 snap-x snap-mandatory overflow-x-auto md:snap-none"
-          >
-            {board.map(({ date, blocks }, i) => (
-              <DayColumn
+      {/* 表头：在滚动容器之外，所以纵向永远贴顶；横向靠 translateX 跟着走 */}
+      <div
+        className="flex shrink-0 select-none border-b border-zinc-800 bg-zinc-950"
+        style={{ height: HEAD_H }}
+      >
+        <div
+          className="flex shrink-0 flex-col items-center justify-center border-r border-zinc-800/80"
+          style={{ width: AXIS_W }}
+        >
+          <span className="text-[10px] leading-3 text-zinc-600">{md.getMonth() + 1}月</span>
+          <span className="mt-0.5 text-[10px] leading-3 text-zinc-700">第{weekNo}周</span>
+        </div>
+        <div className="min-w-0 flex-1 overflow-hidden" style={{ paddingRight: layout.sbw }}>
+          <div ref={headRef} className="planner-headrow flex h-full">
+            {board.map(({ date }) => (
+              <DayHead
                 key={date}
                 date={date}
-                blocks={blocks}
                 isToday={date === today}
-                nowMin={nowMin}
-                buffer={i < PAD || i > PAD + 6}
-                onBlank={openNew}
-                onEdit={(ev) => setSheet({ mode: "edit", event: ev })}
+                width={layout.narrow ? colW : undefined}
               />
             ))}
           </div>
+        </div>
+      </div>
+
+      {/* 主体：一个容器同时管纵向滚动与（窄屏的）横向滑动 */}
+      <div
+        ref={attachScroll}
+        className={`planner-scroll min-h-0 flex-1 select-none ${
+          layout.narrow
+            ? "snap-x snap-mandatory scroll-pl-14 overflow-auto"
+            : "overflow-x-hidden overflow-y-auto"
+        }`}
+      >
+        {/* 窄屏下这一行要 w-max：否则 sticky 的包含块只有一屏宽，左侧时间轴钉不住 */}
+        <div
+          className={`flex items-start ${layout.narrow ? "w-max" : "w-full"}`}
+          style={{ height: contentH }}
+        >
+          {/* 时间轴：纵向随内容、横向钉住 */}
+          <aside
+            className="sticky left-0 z-30 shrink-0 border-r border-zinc-800/80 bg-zinc-950"
+            style={{ width: AXIS_W, height: contentH }}
+          >
+            {HOURS.map((h) => (
+              <div
+                key={h}
+                className="absolute right-2 text-[11px] leading-none tabular-nums text-zinc-500"
+                style={{ top: (h - HOURS[0]) * layout.hourH + 5 }}
+              >
+                {hourLabel(h)}
+              </div>
+            ))}
+
+            {nowVisible && (
+              <div
+                className="absolute right-1 -translate-y-1/2 rounded bg-emerald-500 px-1 py-px text-[10px] font-semibold leading-none tabular-nums text-zinc-950"
+                style={{ top: ((nowMin - DAY_START_MIN) / 60) * layout.hourH }}
+              >
+                {hourMinLabel(nowMin)}
+              </div>
+            )}
+          </aside>
+
+          {board.map(({ date, blocks }) => (
+            <DayColumn
+              key={date}
+              date={date}
+              blocks={blocks}
+              isToday={date === today}
+              nowMin={nowMin}
+              width={layout.narrow ? colW : undefined}
+              hourH={layout.hourH}
+              contentH={contentH}
+              onBlank={openNew}
+              onEdit={(ev) => setSheet({ mode: "edit", event: ev })}
+            />
+          ))}
         </div>
       </div>
 
@@ -255,101 +433,6 @@ export default function Planner() {
           onDelete={handleDelete}
         />
       )}
-    </div>
-  );
-}
-
-function DayColumn({
-  date,
-  blocks,
-  isToday,
-  nowMin,
-  buffer,
-  onBlank,
-  onEdit,
-}: {
-  date: string;
-  blocks: DayBlock[];
-  isToday: boolean;
-  nowMin: number;
-  /** 前后缓冲的那一周：桌面端不显示 */
-  buffer: boolean;
-  onBlank: (date: string, hour: number) => void;
-  onEdit: (ev: PlanEvent) => void;
-}) {
-  const wd = weekdayCn(date);
-  const weekend = wd === "周六" || wd === "周日";
-
-  return (
-    <div
-      className={`planner-col flex snap-start flex-col border-r border-zinc-900 ${
-        buffer ? "planner-col--buffer" : ""
-      } ${isToday ? "bg-zinc-900/25" : ""}`}
-    >
-      <div className="sticky top-0 z-20 flex h-11 shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-950 px-2">
-        <span className={`text-[11px] ${isToday ? "text-zinc-200" : weekend ? "text-zinc-600" : "text-zinc-500"}`}>
-          {wd}
-        </span>
-        <span
-          className={`text-[11px] tabular-nums ${
-            isToday
-              ? "flex h-5 min-w-5 items-center justify-center rounded-full bg-zinc-100 px-1.5 font-semibold text-zinc-950"
-              : "text-zinc-600"
-          }`}
-        >
-          {monthDayCn(date)}
-        </span>
-      </div>
-
-      <div className="planner-gridlines planner-daygrid relative">
-        {/* 空白格：点一下就在这个整点新建 */}
-        {HOURS.map((h) => (
-          <button
-            key={h}
-            aria-label={`${date} ${h} 点 新建`}
-            className="absolute inset-x-0 transition-colors hover:bg-zinc-700/20"
-            style={{ top: `${pctTop(h * 60)}%`, height: `${100 / 18}%` }}
-            onClick={() => onBlank(date, h)}
-          />
-        ))}
-
-        {/* 日程块 */}
-        {blocks.map((b) => {
-          const w = 100 / b.cols;
-          const meta = KIND_META[b.kind];
-          const ev = b.event;
-          return (
-            <button
-              key={b.key}
-              disabled={!ev}
-              onClick={() => ev && onEdit(ev)}
-              className={`absolute z-10 overflow-hidden rounded-md border px-1.5 py-[3px] text-left leading-tight ${meta.block} ${
-                ev ? "cursor-pointer hover:brightness-125" : "cursor-default"
-              }`}
-              style={{
-                top: `${b.top}%`,
-                height: `calc(${b.height}% - 2px)`,
-                left: `calc(${b.col * w}% + 1px)`,
-                width: `calc(${w}% - 3px)`,
-              }}
-            >
-              <span className="block truncate text-[11px] font-medium">{b.title}</span>
-              <span className="block truncate text-[10px] opacity-70">
-                {b.start}
-                {b.sub ? ` · ${b.sub}` : ""}
-              </span>
-            </button>
-          );
-        })}
-
-        {/* 当前时间线 */}
-        {isToday && nowMin >= DAY_START_MIN && nowMin < DAY_END_MIN && (
-          <div className="pointer-events-none absolute inset-x-0 z-20" style={{ top: `${pctTop(nowMin)}%` }}>
-            <div className="h-px bg-rose-500" />
-            <div className="absolute -top-[3px] left-0 h-[7px] w-[7px] rounded-full bg-rose-500" />
-          </div>
-        )}
-      </div>
     </div>
   );
 }

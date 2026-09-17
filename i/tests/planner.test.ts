@@ -3,11 +3,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { addDays, mondayOf, termWeek, weekdayCn, weekdayIndex } from "../src/lib/date.ts";
-import { courseOnWeek, coursesOnDate, parseWeeks, CLASS_SCHEDULE } from "../src/lib/schedule.ts";
+import {
+  courseOnWeek,
+  coursesOnDate,
+  parseWeeks,
+  CLASS_SCHEDULE,
+  PERIOD_TIME,
+} from "../src/lib/schedule.ts";
 import {
   axisRange,
   buildDay,
   layoutColumn,
+  parityLabel,
   pctHeight,
   pctTop,
   eventsForDate,
@@ -171,4 +178,35 @@ test("buildDay：课程与自定义日程合并，既带定位也带可编辑原
   assert.equal(own.title, "自习");
   assert.equal(own.event?.id, 9); // 自己排的带原对象，点击可编辑
   assert.equal(own.sub, "算法");
+});
+
+test("作息时间：第 9-10 节是 19:30–21:20（不是 19:00–20:30）", () => {
+  assert.deepEqual(PERIOD_TIME["9-10"], ["19:30", "21:20"]);
+  assert.deepEqual(PERIOD_TIME["1-2"], ["08:20", "10:00"]);
+
+  const tue = coursesOnDate("2026-09-15");
+  const java = tue.find((c) => c.name.startsWith("Java"))!;
+  assert.equal(java.start, "19:30");
+  assert.equal(java.end, "21:20");
+
+  const thu = coursesOnDate("2026-09-17");
+  assert.equal(thu[0].start, "19:30"); // 形势与政策5 也是 9-10 节
+});
+
+test("课程块第三行带节次与地点，单双周单独做角标", () => {
+  assert.equal(parityLabel("3-19"), "");
+  assert.equal(parityLabel("4-18双"), "双周");
+  assert.equal(parityLabel("3-9单"), "单周");
+
+  const wed = buildDay("2026-09-16", coursesOnDate("2026-09-16"), []);
+  const first = wed[0];
+  assert.equal(first.title, "软件工程");
+  assert.equal(first.sub, "第1-2节 · 图书馆5楼16机房");
+  assert.equal(first.weeks, "");
+
+  // 软件体系结构 9-10 节是单周课 → 角标显示「单周」
+  const single = wed.find((b) => b.weeks === "单周")!;
+  assert.ok(single);
+  assert.equal(single.title, "软件体系结构");
+  assert.equal(single.sub, "第9-10节 · 图书馆6楼9机房");
 });

@@ -21,13 +21,21 @@ export type Course = {
 };
 
 // 节次 → 起止时间（2026.9 实际作息，连上两节：第1节8:20-9:05、第2节9:15-10:00，依此类推）
+// 依据：班级课表附页「二、作息时间表」；第 9 节 19:30-20:20、第 10 节 20:30-21:20 → 9-10 节到 21:20
 export const PERIOD_TIME: Record<string, [string, string]> = {
   "1-2": ["08:20", "10:00"],
   "3-4": ["10:20", "12:00"],
   "5-6": ["14:30", "16:10"],
   "7-8": ["16:30", "18:10"],
-  "9-10": ["19:00", "20:30"],
+  "9-10": ["19:30", "21:20"],
 };
+
+/** 课表的 5 个时段槽位（左侧时间轴按它标节次） */
+export const PERIOD_SLOTS = Object.entries(PERIOD_TIME).map(([period, [start, end]]) => ({
+  period,
+  start,
+  end,
+}));
 
 function mk(id: string, day: string, period: string, name: string, teacher: string, place: string, weeks: string): Course {
   const [start, end] = PERIOD_TIME[period];

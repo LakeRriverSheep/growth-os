@@ -9,31 +9,45 @@ export const KIND_LIST: EventKind[] = ["class", "train", "study", "life"];
 
 export const KIND_META: Record<
   EventKind,
-  { label: string; dot: string; block: string; soft: string }
+  {
+    label: string;
+    /** 小圆点（选择器） */
+    dot: string;
+    /** 选中态（选择器） */
+    soft: string;
+    /** 块底：淡色 + hover 提亮 */
+    bg: string;
+    /** 块左侧色条 */
+    bar: string;
+  }
 > = {
   class: {
     label: "课程",
     dot: "bg-sky-400",
-    block: "border-sky-500/50 bg-sky-500/15 text-sky-50",
     soft: "border-sky-500 bg-sky-500/20 text-sky-100",
+    bg: "bg-sky-500/15 hover:bg-sky-500/25",
+    bar: "border-sky-400/80",
   },
   train: {
     label: "训练",
     dot: "bg-emerald-400",
-    block: "border-emerald-500/50 bg-emerald-500/15 text-emerald-50",
     soft: "border-emerald-500 bg-emerald-500/20 text-emerald-100",
+    bg: "bg-emerald-500/15 hover:bg-emerald-500/25",
+    bar: "border-emerald-400/80",
   },
   study: {
     label: "学习",
     dot: "bg-amber-400",
-    block: "border-amber-500/50 bg-amber-500/15 text-amber-50",
     soft: "border-amber-500 bg-amber-500/20 text-amber-100",
+    bg: "bg-amber-500/15 hover:bg-amber-500/25",
+    bar: "border-amber-400/80",
   },
   life: {
     label: "生活",
     dot: "bg-violet-400",
-    block: "border-violet-500/50 bg-violet-500/15 text-violet-50",
     soft: "border-violet-500 bg-violet-500/20 text-violet-100",
+    bg: "bg-violet-500/15 hover:bg-violet-500/25",
+    bar: "border-violet-400/80",
   },
 };
 
@@ -139,7 +153,10 @@ export type DayBlock = {
   /** 有 event = 自己排的（可点开编辑）；null = 课表来的，只读 */
   event: PlanEvent | null;
   title: string;
+  /** 第三行：课程的「第1-2节 · 图书馆5楼16机房」，自己排的就是备注 */
   sub: string;
+  /** 第二行尾部的角标：课程的「单周 / 双周」 */
+  weeks?: string;
   kind: EventKind;
   start: string;
   end: string;
@@ -148,6 +165,12 @@ export type DayBlock = {
   col: number;
   cols: number;
 };
+
+/** "4-18双" → "双周"；每周的课返回空串 */
+export function parityLabel(weeks: string): string {
+  const m = /(单|双)\s*$/.exec(weeks.trim());
+  return m ? `${m[1]}周` : "";
+}
 
 /** 该日期命中的自定义日程：weekly 的按星期几匹配，其余按日期精确匹配 */
 export function eventsForDate(date: string, events: PlanEvent[]): PlanEvent[] {
@@ -164,6 +187,8 @@ export type CourseLike = {
   start: string;
   end: string;
   weeks: string;
+  /** 节次，如 "1-2"（课表来的才有） */
+  period?: string;
 };
 
 /** 把「课程 + 自定义日程」合并成一天的可视块列表，附带并排布局与百分比定位 */
@@ -177,6 +202,7 @@ export function buildDay(
     event: PlanEvent | null;
     title: string;
     sub: string;
+    weeks?: string;
     kind: EventKind;
     start: string;
     end: string;
@@ -193,7 +219,8 @@ export function buildDay(
       key: `c:${c.id}`,
       event: null,
       title: c.name,
-      sub: c.place || c.teacher,
+      sub: [c.period ? `第${c.period}节` : "", c.place || c.teacher].filter(Boolean).join(" · "),
+      weeks: parityLabel(c.weeks),
       kind: "class",
       start: c.start,
       end: c.end,
@@ -232,6 +259,7 @@ export function buildDay(
         event: raw.event,
         title: raw.title,
         sub: raw.sub,
+        weeks: raw.weeks,
         kind: raw.kind,
         start: raw.start,
         end: raw.end,
