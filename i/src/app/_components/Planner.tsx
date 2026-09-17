@@ -55,6 +55,8 @@ export default function Planner() {
   const resizeObs = useRef<ResizeObserver | null>(null);
   const headRef = useRef<HTMLDivElement | null>(null);
   const didPinScroll = useRef(false);
+  const didPinX = useRef(false);
+  const pinnedDate = useRef<string | null>(null);
   const wantDateRef = useRef<string | null>(null);
 
   // 量容器：宽度决定是否窄屏，高度决定每小时多高。
@@ -173,34 +175,62 @@ export default function Planner() {
     [layout.hourH],
   );
 
-  // 首屏：把 06:00–07:00 一带顶到最上面，早上第一节课不用往下翻
+  /** 某天最早的一个日程开始时间；没有日程就返回 NaN */
+  const earliestOn = useCallback(
+    (date: string) => {
+      const day = board.find((d) => d.date === date);
+      let m = NaN;
+      for (const b of day?.blocks ?? []) {
+        const v = toMin(b.start);
+        m = Number.isNaN(m) ? v : Math.min(m, v);
+      }
+      return m;
+    },
+    [board],
+  );
+
+  // 首屏定位：
+  // · 宽屏＝整周一屏并排 → 对准本周最早一节课前 30 分钟
+  // · 窄屏＝一屏一天 → 对准「当前看的那一天」最早一节课前 30 分钟；
+  //   左右滑到另一天时跟着重新定位（一天一屏，换天就等于换上下文）
   useEffect(() => {
-    if (!layout.h || didPinScroll.current) return;
+    if (!layout.h) return;
+    if (layout.narrow) {
+      const focused = days[focusIdx];
+      if (!focused || pinnedDate.current === focused) return;
+      pinnedDate.current = focused;
+      const first = earliestOn(focused);
+      jumpTo(Number.isNaN(first) ? 7 * 60 : first - 30, false);
+      return;
+    }
+    if (didPinScroll.current) return;
+    didPinScroll.current = true;
     const first = Number.isFinite(earliestMin) ? earliestMin : 7 * 60;
     jumpTo(Math.min(7 * 60, first - 30), false);
-    didPinScroll.current = true;
-  }, [layout.h, earliestMin, jumpTo]);
+  }, [layout.h, layout.narrow, days, focusIdx, earliestMin, earliestOn, jumpTo]);
 
   const syncHead = useCallback((sl: number) => {
     const h = headRef.current;
     if (h) h.style.transform = sl ? `translateX(${-sl}px)` : "";
   }, []);
 
-  // 窄屏：切周后回到本周周一那一屏；表头同步平移
+  // 窄屏：首屏落在「今天」（不在本周时退回周一），切周后回到新一周的周一；表头同步平移
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !layout.narrow || !colW) return;
     const raf = requestAnimationFrame(() => {
       const want = wantDateRef.current;
-      const idx = want ? days.indexOf(want) : -1;
-      const i = idx >= 0 ? idx : PAD;
+      let i = want ? days.indexOf(want) : -1;
+      if (i < 0 && !didPinX.current && today) i = days.indexOf(today);
+      if (i < 0) i = PAD;
       wantDateRef.current = null;
+      didPinX.current = true;
       el.scrollLeft = i * colW;
       setFocusIdx(i);
       syncHead(el.scrollLeft);
     });
     return () => cancelAnimationFrame(raf);
-  }, [monday, layout.narrow, colW, days, syncHead]);
+  }, [monday, layout.narrow, colW, days, syncHead, today]);
 
   // 宽屏：没有横向滚动，表头别留位移
   useEffect(() => {
@@ -277,6 +307,7 @@ export default function Planner() {
   /** 今天：回到本周、切到今天的列、滚到当前时间 */
   function goToday() {
     wantDateRef.current = today;
+    pinnedDate.current = today; // 纵向由下面这行直接定位到此刻，别再让「按天定位」盖掉
     setAnchor(today);
     jumpTo(nowMin >= 0 ? nowMin - 90 : 7 * 60, true);
     const el = scrollRef.current;

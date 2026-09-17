@@ -155,7 +155,7 @@ test("buildDay：课程与自定义日程合并，既带定位也带可编辑原
       id: "wed1",
       name: "软件工程",
       teacher: "甘利",
-      place: "图书馆5楼16机房",
+      place: "图书馆5楼5机房",
       start: "08:20",
       end: "10:00",
       weeks: "3-19",
@@ -180,17 +180,91 @@ test("buildDay：课程与自定义日程合并，既带定位也带可编辑原
   assert.equal(own.sub, "算法");
 });
 
-test("作息时间：第 9-10 节是 19:30–21:20（不是 19:00–20:30）", () => {
-  assert.deepEqual(PERIOD_TIME["9-10"], ["19:30", "21:20"]);
+test("作息时间：第 9-10 节是 19:00–20:30（19:30–21:20 是「大一晚修」，专升本不适用）", () => {
+  assert.deepEqual(PERIOD_TIME["9-10"], ["19:00", "20:30"]);
   assert.deepEqual(PERIOD_TIME["1-2"], ["08:20", "10:00"]);
+  assert.deepEqual(PERIOD_TIME["3-4"], ["10:20", "12:00"]);
+  assert.deepEqual(PERIOD_TIME["5-6"], ["14:30", "16:10"]);
+  assert.deepEqual(PERIOD_TIME["7-8"], ["16:30", "18:10"]);
 
   const tue = coursesOnDate("2026-09-15");
   const java = tue.find((c) => c.name.startsWith("Java"))!;
-  assert.equal(java.start, "19:30");
-  assert.equal(java.end, "21:20");
+  assert.equal(java.start, "19:00");
+  assert.equal(java.end, "20:30");
 
   const thu = coursesOnDate("2026-09-17");
-  assert.equal(thu[0].start, "19:30"); // 形势与政策5 也是 9-10 节
+  assert.equal(thu[0].start, "19:00"); // 形势与政策5 也是 9-10 节
+  assert.equal(thu[0].end, "20:30");
+});
+
+// ── 金标准：把课表逐格钉死 ─────────────────────────────────────
+// 对照源：26软件工程（专升本）2026 秋季学期课表（含 9/16 教室调整）
+// 第 3 周（9/14-9/18，单周）；周五起无课
+const GOLDEN_WEEK3: Record<string, string[]> = {
+  "2026-09-14": [
+    // 算法设计与分析 1-2 节是「双周 4-18」→ 第 3 周（单周）不排
+    "3-4 算法设计与分析 赵小蕾 图书馆6楼11机房 3-19",
+    "5-6 人工智能数学基础 吴志寒 图书馆506 3-19",
+    "9-10 Java EE企业级开发 黄勇 图书馆5楼4机房 3-19",
+  ],
+  "2026-09-15": [
+    "3-4 人工智能数学基础 吴志寒 图书馆506 3-19",
+    // 国家安全教育「仅 7-8 周」→ 第 3 周不排
+    "9-10 Java EE企业级开发 黄勇 图书馆5楼4机房 3-19",
+  ],
+  "2026-09-16": [
+    "1-2 软件工程 甘利 图书馆5楼5机房 3-19", // 9/16 起由 16机房 调整为 5机房
+    "3-4 软件工程 甘利 图书馆5楼5机房 3-19",
+    "5-6 中国近代史纲要 彭语嫣 明德楼601 3-18",
+    "7-8 软件体系结构 钟泽荣 图书馆6楼9机房 3-19",
+    "9-10 软件体系结构 钟泽荣 图书馆6楼9机房 3-19单",
+  ],
+  "2026-09-17": [
+    // 就业指导 11-19 周才开；中国近代史纲要 4-18双 在第 3 周（单周）不排
+    // → 周四第 3 周只剩晚上的形势与政策5
+    "9-10 形势与政策5 腰蓝 弘德楼201 3-9单",
+  ],
+  "2026-09-18": [],
+  "2026-09-19": [],
+  "2026-09-20": [],
+};
+
+test("金标准：第 3 周（9/14-9/18）逐格与课表一致", () => {
+  for (const [date, expected] of Object.entries(GOLDEN_WEEK3)) {
+    const got = coursesOnDate(date).map(
+      (c) => `${c.period} ${c.name} ${c.teacher} ${c.place} ${c.weeks}`,
+    );
+    assert.deepEqual(got, expected, `${date} ${weekdayCn(date)}`);
+  }
+});
+
+test("金标准：单双周 + 起始周过滤真的生效", () => {
+  // 算法设计与分析：1-2 节是「双周 4-18」，3-4 节是「3-19 每周」
+  const algo = (d: string) =>
+    coursesOnDate(d).filter((c) => c.name === "算法设计与分析").map((c) => c.period);
+  assert.deepEqual(algo("2026-09-14"), ["3-4"]); // 第 3 周（单周）
+  assert.deepEqual(algo("2026-09-21"), ["1-2", "3-4"]); // 第 4 周（双周）：两节都上
+  assert.deepEqual(algo("2026-09-28"), ["3-4"]); // 第 5 周（单周）
+
+  // 形势与政策5：单周 3-9
+  const policy = (d: string) => coursesOnDate(d).some((c) => c.name === "形势与政策5");
+  assert.equal(policy("2026-09-17"), true); // 第 3 周
+  assert.equal(policy("2026-09-24"), false); // 第 4 周（双周）
+  assert.equal(policy("2026-10-01"), true); // 第 5 周
+  assert.equal(policy("2026-10-29"), true); // 第 9 周（末周）
+  assert.equal(policy("2026-11-05"), false); // 第 10 周：超范围
+
+  // 国家安全教育：仅 7-8 周（周二）
+  const nse = (d: string) => coursesOnDate(d).some((c) => c.name === "国家安全教育");
+  assert.equal(nse("2026-09-15"), false); // 第 3 周
+  assert.equal(nse("2026-10-13"), true); // 第 7 周
+  assert.equal(nse("2026-10-20"), true); // 第 8 周
+  assert.equal(nse("2026-10-27"), false); // 第 9 周
+
+  // 就业指导：11-19 周（周四）
+  const career = (d: string) => coursesOnDate(d).some((c) => c.name === "就业指导");
+  assert.equal(career("2026-09-24"), false); // 第 4 周
+  assert.equal(career("2026-11-12"), true); // 第 11 周
 });
 
 test("课程块第三行带节次与地点，单双周单独做角标", () => {
@@ -201,7 +275,7 @@ test("课程块第三行带节次与地点，单双周单独做角标", () => {
   const wed = buildDay("2026-09-16", coursesOnDate("2026-09-16"), []);
   const first = wed[0];
   assert.equal(first.title, "软件工程");
-  assert.equal(first.sub, "第1-2节 · 图书馆5楼16机房");
+  assert.equal(first.sub, "第1-2节 · 图书馆5楼5机房"); // 9/16 调整后的教室
   assert.equal(first.weeks, "");
 
   // 软件体系结构 9-10 节是单周课 → 角标显示「单周」

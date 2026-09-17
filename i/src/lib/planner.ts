@@ -153,7 +153,7 @@ export type DayBlock = {
   /** 有 event = 自己排的（可点开编辑）；null = 课表来的，只读 */
   event: PlanEvent | null;
   title: string;
-  /** 第三行：课程的「第1-2节 · 图书馆5楼16机房」，自己排的就是备注 */
+  /** 第三行：课程的「第1-2节 · 图书馆5楼5机房」，自己排的就是备注 */
   sub: string;
   /** 第二行尾部的角标：课程的「单周 / 双周」 */
   weeks?: string;
