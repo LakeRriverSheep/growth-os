@@ -9,6 +9,7 @@ import {
   daysLeft,
 } from "@/lib/ielts";
 import DailyChecklist from "./_components/DailyChecklist";
+import PageHeader from "@/app/_components/PageHeader";
 
 const blocks = [
   {
@@ -55,15 +56,7 @@ export default function EnglishPage() {
 
   return (
     <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100">
-      <header className="flex items-center gap-4 border-b border-zinc-900 px-6 py-4">
-        <a href="/" className="text-xs text-zinc-500 hover:text-zinc-300">
-          ← 返回
-        </a>
-        <h1 className="text-lg font-semibold">雅思</h1>
-        <span className="text-xs text-zinc-500">
-          目标 {IELTS_TARGET} · {IELTS_DEADLINE} 前
-        </span>
-      </header>
+      <PageHeader title="雅思" sub={`目标 ${IELTS_TARGET} · ${IELTS_DEADLINE} 前`} />
 
       <main className="px-6 py-6">
         {/* 目标概览 */}

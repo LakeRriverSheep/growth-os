@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
+import PageHeader from "@/app/_components/PageHeader";
 
 // 听力 / 阅读 共用：场景列表 → 点进去记生词和句子
 type Note = {
@@ -80,13 +81,7 @@ export default function SceneNotes({
 
   return (
     <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100">
-      <header className="flex items-center gap-4 border-b border-zinc-900 px-6 py-4">
-        <a href={backHref} className="text-xs text-zinc-500 hover:text-zinc-300">
-          ← 返回
-        </a>
-        <h1 className="text-lg font-semibold">{title}</h1>
-        <p className="hidden text-xs text-zinc-500 sm:block">{hint}</p>
-      </header>
+      <PageHeader title={title} sub={hint} backHref={backHref} />
 
       <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(220px,280px)_1fr]">
         {/* 场景列表 */}

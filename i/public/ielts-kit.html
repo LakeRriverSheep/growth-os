@@ -82,6 +82,32 @@ nav a.on{background:var(--green)}
 .divider{height:1px;background:var(--border);margin:20px 0}
 @media(max-width:600px){.word{min-width:80px}.pos{display:none}.zh{display:none}}
 </style>
+<style>
+/* I 站点深色主题覆盖（原表为浅色，变量重定义即可整体换肤） */
+:root{
+  --bg:#09090b;--card:#18181b;--text:#f4f4f5;--muted:#a1a1aa;--border:#27272a;--done:#52525b;
+  --green:#34d399;--green-l:#064e3b;--coral:#fb923c;--coral-l:#431407;
+  --amber:#fbbf24;--amber-l:#422006;--blue:#60a5fa;--blue-l:#0c2a4a;--purple:#a78bfa;--purple-l:#2e1065;
+}
+body{background:var(--bg);color:var(--text)}
+header{border-bottom-color:var(--green)}
+header h1,.sub{color:var(--text)!important}
+nav a{color:#a1a1aa}
+nav a.on,nav a:hover{background:var(--green);color:#052e22}
+.progress-bar{color:#a1a1aa}
+.progress-bar .bar,.progress-bar>div{background:#27272a}
+.tpl-num{background:var(--green);color:#052e22}
+.filter-bar button{background:#18181b;color:#a1a1aa;border-color:var(--border)}
+.filter-bar button.on{background:var(--green);color:#052e22;border-color:var(--green)}
+.card,.box,.panel,section>div{background:var(--card)!important;border-color:var(--border)!important}
+.item,.word-item,.row{border-color:var(--border)!important}
+input,select,textarea{background:#18181b!important;color:var(--text)!important;border:1px solid var(--border)!important}
+.done,.checked{color:var(--done)}
+h1,h2,h3,h4,strong,b{color:var(--text)}
+.muted,.note,.tip{color:var(--muted)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:#3f3f46;border-radius:5px}
+</style>
 </head>
 <body>
 

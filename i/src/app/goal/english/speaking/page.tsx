@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PART1_FRAME, PART2_FRAME, PART3_STEPS, SPEAKING_PARTS } from "@/lib/ielts";
+import PageHeader from "@/app/_components/PageHeader";
 
 type Question = {
   id: string;
@@ -170,18 +171,18 @@ export default function SpeakingPage() {
 
   return (
     <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100">
-      <header className="flex items-center gap-4 border-b border-zinc-900 px-6 py-4">
-        <a href="/goal/english" className="text-xs text-zinc-500 hover:text-zinc-300">
-          ← 返回
-        </a>
-        <h1 className="text-lg font-semibold">口语</h1>
-        <a
-          href="/goal/english/speaking/skeleton"
-          className="ml-auto text-xs text-zinc-500 hover:text-zinc-300"
-        >
-          Part 3 骨架练习 →
-        </a>
-      </header>
+      <PageHeader
+        title="口语"
+        backHref="/goal/english"
+        right={
+          <a
+            href="/goal/english/speaking/skeleton"
+            className="text-xs text-zinc-500 hover:text-zinc-300"
+          >
+            Part 3 骨架练习 →
+          </a>
+        }
+      />
 
       <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(300px,420px)_1fr]">
         {/* 题目列表 */}

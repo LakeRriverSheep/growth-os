@@ -328,6 +328,12 @@ export default function Planner() {
     <div className="flex h-[100dvh] flex-col bg-zinc-950 text-zinc-100">
       {/* 顶栏 */}
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-zinc-800 px-3 md:px-4">
+        <Link
+          href="/"
+          className="shrink-0 text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+        >
+          ← 返回
+        </Link>
         <div className="flex items-baseline gap-2">
           <span className="text-xl font-bold tracking-tight">I</span>
           <span className="hidden text-[11px] text-zinc-600 sm:inline">周计划</span>
@@ -366,12 +372,6 @@ export default function Planner() {
           </span>
         </div>
 
-        <Link
-          href="/goal/fitness"
-          className="ml-auto shrink-0 rounded-lg border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-100"
-        >
-          健身
-        </Link>
       </header>
 
       {/* 表头：在滚动容器之外，所以纵向永远贴顶；横向靠 translateX 跟着走 */}

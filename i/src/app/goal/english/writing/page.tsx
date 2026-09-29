@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { TASK1_TYPES, TASK2_TOPICS, TASK2_TYPES } from "@/lib/ielts";
+import PageHeader from "@/app/_components/PageHeader";
 
 type Piece = {
   id: string;
@@ -74,25 +75,25 @@ export default function WritingPage() {
 
   return (
     <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100">
-      <header className="flex items-center gap-4 border-b border-zinc-900 px-6 py-4">
-        <a href="/goal/english" className="text-xs text-zinc-500 hover:text-zinc-300">
-          ← 返回
-        </a>
-        <h1 className="text-lg font-semibold">写作</h1>
-        <div className="ml-auto flex gap-2">
-          {(["task1", "task2"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTask(t)}
-              className={`rounded-lg px-3 py-1 text-xs ${
-                task === t ? "bg-zinc-100 text-zinc-900" : "border border-zinc-800 text-zinc-400"
-              }`}
-            >
-              {t === "task1" ? "Task 1" : "Task 2"}
-            </button>
-          ))}
-        </div>
-      </header>
+      <PageHeader
+        title="写作"
+        backHref="/goal/english"
+        right={
+          <div className="flex gap-2">
+            {(["task1", "task2"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTask(t)}
+                className={`rounded-lg px-3 py-1 text-xs ${
+                  task === t ? "bg-zinc-100 text-zinc-900" : "border border-zinc-800 text-zinc-400"
+                }`}
+              >
+                {t === "task1" ? "Task 1" : "Task 2"}
+              </button>
+            ))}
+          </div>
+        }
+      />
 
       <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(260px,320px)_1fr]">
         {/* 分类筛选 */}

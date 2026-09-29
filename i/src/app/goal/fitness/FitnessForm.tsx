@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { FitnessInput, FitnessPlan } from "@/lib/fitness";
 import { movesByEquipment } from "@/lib/fitness";
 import PlanView from "./PlanView";
+import PageHeader from "@/app/_components/PageHeader";
 import PlanSummary from "./PlanSummary";
 import Card from "./_components/Card";
 import Section from "./_components/Section";
@@ -35,19 +36,37 @@ const INITIAL_FORM: FitnessInput = {
   userPicks: {},
 };
 
-export default function FitnessForm() {
+type SavedPlan = {
+  plan?: unknown;
+  answers?: unknown;
+  source?: string;
+  updatedAt?: string;
+};
+
+export default function FitnessForm({ initial }: { initial?: SavedPlan | null } = {}) {
+  const initialPlan =
+    initial && initial.source === "fitness-calc" && initial.plan && !Array.isArray(initial.plan)
+      ? (initial.plan as FitnessPlan)
+      : null;
+
   const [loading, setLoading] = useState(false);
-  const [plan, setPlan] = useState<FitnessPlan | null>(null);
-  const [restored, setRestored] = useState(false);
+  const [plan, setPlan] = useState<FitnessPlan | null>(initialPlan);
+  const [restored, setRestored] = useState(!!initialPlan);
   const [form, setForm] = useState<FitnessInput>(INITIAL_FORM);
   // 保存的计划更新时间，用于摘要卡片显示
-  const [planUpdatedAt, setPlanUpdatedAt] = useState<string | undefined>(undefined);
+  const [planUpdatedAt, setPlanUpdatedAt] = useState<string | undefined>(
+    initial?.updatedAt ?? undefined,
+  );
   // 板块状态：「home」= 摘要+表单折叠 / 「full」= 完整 PlanView / 「edit」= 摘要+表单展开
   const [viewMode, setViewMode] = useState<"home" | "full" | "edit">("home");
   const [editExpanded, setEditExpanded] = useState(false);
 
-  // 进入页面时恢复已保存的计划
+  // 进入页面时恢复已保存的计划（服务端已预取时不再等待请求）
   useEffect(() => {
+    if (initialPlan) {
+      setPlanUpdatedAt(initial?.updatedAt);
+      return;
+    }
     fetch("/api/plan?goalId=fitness")
       .then((r) => (r.ok ? r.json() : null))
       .then(async (data) => {
@@ -250,12 +269,9 @@ export default function FitnessForm() {
 
   // 主页面：两个板块 ——「我的计划」+「制定新计划」
   return (
-    <div className="mx-auto w-full max-w-5xl px-6 pb-32 pt-6">
-      <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
-        ← 返回
-      </Link>
-      <h1 className="mt-3 text-2xl font-bold">💪 健身计划</h1>
-      <p className="mt-1 text-xs text-zinc-500">上面看你的计划 · 下面调整或新建</p>
+    <div className="mx-auto w-full max-w-5xl pb-32">
+      <PageHeader title="💪 健身计划" sub="上面看你的计划 · 下面调整或新建" />
+      <div className="px-6 pt-6">
 
       {/* 板块 1：我的计划（有计划时显示摘要，无计划时引导去填表） */}
       {plan ? (
@@ -305,6 +321,7 @@ export default function FitnessForm() {
           // 无计划 → 直接显示表单
           <div>{renderForm()}</div>
         )}
+      </div>
       </div>
     </div>
   );

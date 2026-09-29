@@ -1,26 +1,16 @@
-import Link from "next/link";
+import PageHeader from "@/app/_components/PageHeader";
 import { identity } from "@/lib/identity";
 
 export const metadata = { title: "我 · I" };
 
-function BackLink() {
-  return (
-    <Link
-      href="/"
-      className="text-xs text-zinc-500 transition-colors hover:text-zinc-300"
-    >
-      ← 返回
-    </Link>
-  );
-}
-
 export default function MePage() {
   return (
     <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100">
-      <header className="flex items-center justify-between px-6 pt-6">
-        <BackLink />
-        <p className="text-xs text-zinc-600">最后更新 {identity.updatedAt}</p>
-      </header>
+      <PageHeader
+        title="我"
+        sub="身份层"
+        right={<p className="text-xs text-zinc-600">最后更新 {identity.updatedAt}</p>}
+      />
 
       <main className="w-full px-6 pb-16 pt-6">
         <h1 className="text-2xl font-bold tracking-tight">我</h1>

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { PART3_STEPS, PART3_TOPICS } from "@/lib/ielts";
+import PageHeader from "@/app/_components/PageHeader";
 
 // Part 3 同骨架多话题练习：7 步骨架不变，换 8 个话题往里填
 // 三种模式：完整显示 / 隐藏模板词（自测框架）/ 隐藏内容词（练习填空）
@@ -29,13 +30,12 @@ export default function SkeletonPage() {
 
   return (
     <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100">
-      <header className="flex items-center gap-4 border-b border-zinc-900 px-6 py-4">
-        <a href="/goal/english/speaking" className="text-xs text-zinc-500 hover:text-zinc-300">
-          ← 返回口语
-        </a>
-        <h1 className="text-lg font-semibold">Part 3 · 同骨架套话题</h1>
-        <span className="text-xs text-zinc-500">7 步框架不变，换话题往里填</span>
-      </header>
+      <PageHeader
+        title="Part 3 · 同骨架套话题"
+        sub="7 步框架不变，换话题往里填"
+        backHref="/goal/english/speaking"
+        backLabel="← 返回口语"
+      />
 
       <main className="px-6 py-6">
         {/* 模式切换 */}

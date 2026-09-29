@@ -14,19 +14,21 @@
 <title>反思卡片库</title>
 <style>
   :root {
-    --bg: #0f1115;
-    --bg-soft: #161a21;
-    --card: #1c212b;
-    --card-hover: #232936;
-    --border: #2a3140;
-    --text: #e8eaf0;
-    --text-dim: #9aa3b2;
-    --text-faint: #6b7280;
-    --accent: #5b8cff;
-    --accent-soft: rgba(91,140,255,.14);
-    --gold: #e8b45a;
-    --green: #4cc38a;
-    --red: #e5636f;
+    --bg: #09090b;
+    --bg-soft: #131316;
+    --card: #18181b;
+    --card-hover: #232329;
+    --border: #27272a;
+    --text: #f4f4f5;
+    --text-dim: #a1a1aa;
+    --text-faint: #71717a;
+    --accent: #60a5fa;
+    --accent-soft: rgba(96,165,250,.14);
+    --gold: #fbbf24;
+    --green: #34d399;
+    --red: #f87171;
+    --thought: #a78bfa;
+    --thought-soft: rgba(167,139,250,.14);
     --radius: 14px;
   }
   * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
@@ -150,6 +152,32 @@
   .board-tab.active[data-board="reflection"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
   .board-tab.active[data-board="rules"] { background: rgba(76,195,138,.12); border-color: var(--green); color: var(--green); }
   .board-tab.active[data-board="principle"] { background: rgba(232,180,90,.12); border-color: var(--gold); color: var(--gold); }
+  .board-tab.active[data-board="thought"] { background: var(--thought-soft); border-color: var(--thought); color: var(--thought); }
+
+  /* ---------- Thought cards（一句话，极简） ---------- */
+  .thought-list { display: flex; flex-direction: column; gap: 14px; }
+  .thought-item {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    border-left: 3px solid var(--thought);
+    padding: 18px 20px; cursor: pointer; transition: all .18s;
+  }
+  .thought-item:hover { background: var(--card-hover); transform: translateX(3px); }
+  .thought-item-text { font-size: 1.05rem; line-height: 1.8; white-space: pre-wrap; font-weight: 500; }
+  .thought-item-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  .thought-tag { color: var(--thought); background: var(--thought-soft); }
+  .thought-quote {
+    font-size: 1.25rem; line-height: 1.9; font-weight: 500;
+    background: var(--thought-soft); border-radius: 12px; padding: 18px 20px; color: var(--text);
+    white-space: pre-wrap;
+  }
+  .opt-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 4px; }
+  .opt-item {
+    text-align: left; background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; color: var(--text); cursor: pointer; font-size: .95rem; line-height: 1.7;
+    font-family: inherit; transition: all .15s;
+  }
+  .opt-item:hover { border-color: var(--thought); background: var(--card-hover); }
+  .opt-item .opt-badge { font-size: .72rem; color: var(--thought); font-weight: 700; margin-right: 6px; }
 
   /* ---------- Rule cards ---------- */
   .rcard.rule-card::before { background: var(--green); }
@@ -296,6 +324,11 @@
 </head>
 <body>
 
+<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid #27272a;background:#09090b;position:sticky;top:0;z-index:60">
+  <a href="/" style="color:#a1a1aa;font-size:12px;text-decoration:none">← 返回</a>
+  <span style="color:#52525b;font-size:11px">I · 思想卡片</span>
+</div>
+
 <header>
   <div class="logo">反思<span>卡片库</span></div>
   <div class="header-stats"><span id="headerStats"></span> <span id="syncStatus" style="margin-left:8px"></span></div>
@@ -311,6 +344,7 @@
     <div class="board-tab active" data-board="reflection" id="tabReflection" onclick="switchBoard('reflection')">🃏 反思卡片</div>
     <div class="board-tab" data-board="rules" id="tabRules" onclick="switchBoard('rules')">⚡ 行为规则</div>
     <div class="board-tab" data-board="principle" id="tabPrinciple" onclick="switchBoard('principle')">💡 思想原则</div>
+    <div class="board-tab" data-board="thought" id="tabThought" onclick="switchBoard('thought')">✍️ 一句话</div>
   </div>
 
   <div id="viewLibrary">
@@ -348,6 +382,14 @@
       <div class="tag-filter" id="principleTagFilter"></div>
     </div>
     <div class="grid" id="principleGrid"></div>
+  </div>
+
+  <div id="viewThoughts" style="display:none">
+    <div class="toolbar">
+      <input class="search-input" id="searchThoughtInput" placeholder="搜索一句话…" oninput="renderThoughts()">
+      <div class="tag-filter" id="thoughtTagFilter"></div>
+    </div>
+    <div class="thought-list" id="thoughtList"></div>
   </div>
 </main>
 
@@ -462,6 +504,52 @@
   </div>
 </div>
 
+<!-- 新建一句话弹窗 -->
+<div class="modal-mask" id="newThoughtModal">
+  <div class="modal">
+    <h2>记一句话</h2>
+    <div class="modal-date">写下你想记住的一句话。不用展开，一句话就够。</div>
+    <textarea class="input-area" id="rawThoughtInput" placeholder="例：我希望把自己的思想思考放在正确的地方，不要去想那些无所谓的琐事，不要被这些不知道何时何地的事多多少少影响到我。"></textarea>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('newThoughtModal')">取消</button>
+      <button class="btn" onclick="manualCreateThought()">手动填写</button>
+      <button class="btn btn-primary" id="aiThoughtGenBtn" onclick="aiGenerateThought()">✨ AI 帮我想几个版本</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI 改写选项弹窗 -->
+<div class="modal-mask" id="thoughtOptModal">
+  <div class="modal">
+    <h2>AI 帮你想了几个版本</h2>
+    <div class="modal-date">选一个满意的，或直接用原句。选完还能再手动微调。</div>
+    <div class="opt-list" id="thoughtOptList"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('thoughtOptModal')">取消</button>
+      <button class="btn" onclick="keepOriginalThought()">保留原句</button>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑一句话弹窗 -->
+<div class="modal-mask" id="thoughtEditModal">
+  <div class="modal">
+    <h2 id="thoughtEditModalTitle">编辑</h2>
+    <div class="modal-date">一句话就好。存下来，随时提醒自己。</div>
+    <div class="field-block"><div class="field-label">✍️ 一句话</div><textarea class="edit-input" id="t_text"></textarea></div>
+    <div class="field-block"><div class="field-label">标签（逗号分隔，可空）</div><input class="edit-input" id="t_tags"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('thoughtEditModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveThought()">存下来</button>
+    </div>
+  </div>
+</div>
+
+<!-- 一句话详情弹窗 -->
+<div class="modal-mask" id="thoughtDetailModal">
+  <div class="modal" id="thoughtDetailModalBody"></div>
+</div>
+
 <!-- 设置弹窗 -->
 <div class="modal-mask" id="settingsModal">
   <div class="modal">
@@ -510,6 +598,8 @@
 /* ================= 数据层 ================= */
 const LS_CARDS = "rc_cards_v1";
 const LS_SETTINGS = "rc_settings_v1";
+const LS_DELETED = "rc_deleted_v1";       // 已删除卡片 id 墓碑：阻止云同步把它拉回来
+const LS_DISMISSED = "rc_dismissed_v1";   // 已主动删除/忽略的预设规则 title：不再出现在快捷载入
 
 function loadCards() {
   try { return JSON.parse(localStorage.getItem(LS_CARDS)) || []; } catch { return []; }
@@ -519,11 +609,21 @@ function loadSettings() {
   try { return JSON.parse(localStorage.getItem(LS_SETTINGS)) || {}; } catch { return {}; }
 }
 function persistSettings(s) { localStorage.setItem(LS_SETTINGS, JSON.stringify(s)); }
+function loadDeleted() {
+  try { return JSON.parse(localStorage.getItem(LS_DELETED)) || []; } catch { return []; }
+}
+function saveDeleted(arr) { localStorage.setItem(LS_DELETED, JSON.stringify(arr)); }
+function loadDismissed() {
+  try { return JSON.parse(localStorage.getItem(LS_DISMISSED)) || []; } catch { return []; }
+}
+function saveDismissed(arr) { localStorage.setItem(LS_DISMISSED, JSON.stringify(arr)); }
 
 let cards = loadCards();
+let deletedIds = new Set(loadDeleted());          // 墓碑：这些 id 永不拉回，且主动删云端
+let dismissedPresets = new Set(loadDismissed());  // 已忽略的预设 title，不再出现在快捷载入
 let editingId = null;
 let activeTag = null;
-let activeBoard = "reflection";   // 当前板块：reflection 反思卡 / rules 行为规则
+let activeBoard = "reflection";   // 当前板块：reflection 反思卡 / rules 行为规则 / thoughts 思想原则
 let activeRuleTag = null;
 let ruleEditingId = null;
 let activePrincipleTag = null;
@@ -584,11 +684,11 @@ saveCards(cards);
 /* ================= 云同步（Vercel + Turso） ================= */
 /* 数据存在你自己的 Turso 库，由 Vercel 的 /api/cards 读写。
    每次请求都带「访问口令」，与 Vercel 环境变量 APP_TOKEN 一致才放行(否则 401)。
-   默认走旧站 reflection-cards.vercel.app 的接口（历史数据都在那边，无需迁移）；
-   数据迁移到本站 Turso 库后，把设置页「同步地址」清空即可改为同源 /api/cards。 */
+   syncBase 留空 = 同源 /api/cards（应用部署在 Vercel 时）；旧 GitHub Pages 上打开可填 Vercel 地址。 */
 function apiConfigured() { const s = loadSettings(); return !!s.token; }
 function apiUrl(path) {
   const s = loadSettings();
+  // 默认指向历史数据所在的旧站；把设置里「云同步 API 地址」清空即切换为本网站 /api/cards
   const base = (s.syncBase || "").trim().replace(/\/+$/, "") || "https://reflection-cards.vercel.app";
   return base + "/api/cards" + path;
 }
@@ -629,9 +729,13 @@ async function initSync() {
   setSyncStatus("☁️ 同步中…");
   try {
     const rows = await apiFetchAll();
-    const cloudMap = new Map(rows.map(r => [r.id, r]));
-    // 云端 → 本地（另一台设备新增/更新的卡）
-    rows.forEach(r => {
+    // 主动清理云端里已被本机删除的卡（墓碑），防止它下次又被拉回
+    const ghostIds = rows.filter(r => deletedIds.has(r.id)).map(r => r.id);
+    if (ghostIds.length) await apiDeleteIds(ghostIds);
+    const keepRows = rows.filter(r => !deletedIds.has(r.id));
+    const cloudMap = new Map(keepRows.map(r => [r.id, r]));
+    // 云端 → 本地（另一台设备新增/更新的卡）；墓碑 id 一律不拉回
+    keepRows.forEach(r => {
       const local = cards.find(c => c.id === r.id);
       const cloudCard = { id: r.id, ...r.data };
       if (!local) cards.push(cloudCard);
@@ -642,6 +746,9 @@ async function initSync() {
     await apiUpsert(toPush);
     saveCards(cards);
     renderLibrary();
+    renderPrinciples();
+    renderThoughts();
+    renderRules();
     setSyncStatus("☁️ 已同步", "var(--green)");
   } catch (e) {
     setSyncStatus("☁️ 同步失败，先用本地数据", "var(--red)");
@@ -790,11 +897,17 @@ function openDetail(id) {
   `;
   openModal("detailModal");
 }
-function deleteCard(id) {
-  if (!confirm("确定删除这张卡片？")) return;
+/* 真正删除：记墓碑 + 本地移除 + 立即清云端，防止刷新/多设备把已删卡同步回来 */
+function removeCard(id) {
+  if (!deletedIds.has(id)) { deletedIds.add(id); saveDeleted([...deletedIds]); }
   cards = cards.filter(c => c.id !== id);
   saveCards(cards);
+  if (apiConfigured()) apiDeleteIds([id]).catch(() => {});
   scheduleSyncPush();
+}
+function deleteCard(id) {
+  if (!confirm("确定删除这张卡片？")) return;
+  removeCard(id);
   closeModal("detailModal");
   renderLibrary();
   toast("已删除");
@@ -940,20 +1053,24 @@ function switchBoard(board) {
   document.getElementById("tabReflection").classList.toggle("active", board === "reflection");
   document.getElementById("tabRules").classList.toggle("active", board === "rules");
   document.getElementById("tabPrinciple").classList.toggle("active", board === "principle");
+  document.getElementById("tabThought").classList.toggle("active", board === "thought");
   document.getElementById("viewLibrary").style.display = board === "reflection" ? "block" : "none";
   document.getElementById("viewRules").style.display = board === "rules" ? "block" : "none";
   document.getElementById("viewPrinciples").style.display = board === "principle" ? "block" : "none";
+  document.getElementById("viewThoughts").style.display = board === "thought" ? "block" : "none";
   document.getElementById("viewReview").style.display = "none";
   document.getElementById("reviewBtn").style.display = board === "reflection" ? "" : "none";
   document.getElementById("newEntryBtn").textContent =
-    board === "reflection" ? "+ 新反思" : board === "rules" ? "+ 新规则" : "+ 新思想";
+    ({ reflection: "+ 新反思", rules: "+ 新规则", principle: "+ 新思想", thought: "+ 记一句" })[board] || "+ 新建";
   if (board === "rules") renderRules();
   else if (board === "principle") renderPrinciples();
+  else if (board === "thought") renderThoughts();
   else renderLibrary();
 }
 function openNewEntry() {
   if (activeBoard === "rules") openNewRule();
   else if (activeBoard === "principle") openNewPrinciple();
+  else if (activeBoard === "thought") openNewThought();
   else openNew();
 }
 
@@ -981,7 +1098,7 @@ const PRESET_RULES = [
 ];
 
 function presetLoaded(p) {
-  return cards.some(c => c.kind === "rule" && c.title === p.title);
+  return cards.some(c => c.kind === "rule" && c.title === p.title) || dismissedPresets.has(p.title);
 }
 function addPreset(idx) {
   const p = PRESET_RULES[idx];
@@ -1125,9 +1242,15 @@ function openRuleDetail(id) {
 }
 function deleteRule(id) {
   if (!confirm("确定删除这条规则？")) return;
-  cards = cards.filter(c => c.id !== id);
-  saveCards(cards);
-  scheduleSyncPush();
+  const c = cards.find(x => x.id === id);
+  if (c) {
+    const preset = PRESET_RULES.find(p => p.title === c.title);
+    if (preset && !dismissedPresets.has(preset.title)) {
+      dismissedPresets.add(preset.title);
+      saveDismissed([...dismissedPresets]);
+    }
+  }
+  removeCard(id);
   closeModal("ruleDetailModal");
   renderRules();
   renderLibrary();
@@ -1340,9 +1463,7 @@ function togglePrincipleReview(id, fromDetail) {
 }
 function deletePrinciple(id) {
   if (!confirm("确定删除这条思想？")) return;
-  cards = cards.filter(c => c.id !== id);
-  saveCards(cards);
-  scheduleSyncPush();
+  removeCard(id);
   closeModal("principleDetailModal");
   renderPrinciples();
   renderLibrary();
@@ -1452,6 +1573,209 @@ function savePrincipleCard() {
   closeModal("principleEditModal");
   renderPrinciples();
   renderLibrary();
+}
+
+/* ================= 一句话板块（极简卡） ================= */
+/* 只存一句话：没有展开用法、没有来源，详情页仅原文 + 日期 + 编辑/删除。
+   写完后可让 AI 给几个改写版本（精简/通顺/有力）挑选，不满意可保留原句。 */
+let activeThoughtTag = null;
+let thoughtEditingId = null;
+
+function renderThoughts() {
+  const q = (document.getElementById("searchThoughtInput").value || "").trim().toLowerCase();
+  const wrap = document.getElementById("thoughtList");
+  const thoughts = cards.filter(c => c.kind === "thought")
+    .sort((a,b) => b.created - a.created);
+
+  const allTags = [...new Set(thoughts.flatMap(c => c.tags || []))];
+  document.getElementById("thoughtTagFilter").innerHTML = allTags.map(t =>
+    `<button class="tag-chip ${activeThoughtTag===t?"active":""}" onclick="toggleThoughtTag('${esc(t)}')">${esc(t)}</button>`
+  ).join("");
+
+  let list = thoughts;
+  if (activeThoughtTag) list = list.filter(c => (c.tags||[]).includes(activeThoughtTag));
+  if (q) list = list.filter(c => (c.text || "").toLowerCase().includes(q));
+
+  if (!list.length) {
+    wrap.innerHTML = `<div class="empty-state">
+      <div class="big">✍️</div>
+      ${thoughts.length
+        ? `<div>没有匹配的内容</div>`
+        : `<div>还没有。点右上角「+ 记一句」，写下你想记住的那句话。</div>`}
+    </div>`;
+    return;
+  }
+
+  wrap.innerHTML = list.map(c => `
+    <div class="thought-item" onclick="openThoughtDetail('${c.id}')">
+      <div class="thought-item-text">${esc(c.text)}</div>
+      <div class="thought-item-meta">
+        ${(c.tags||[]).map(t => `<span class="mini-tag thought-tag">${esc(t)}</span>`).join("")}
+        <span class="rcard-date" style="margin-left:auto">${esc(c.date)}</span>
+      </div>
+    </div>`).join("");
+}
+function toggleThoughtTag(t) {
+  activeThoughtTag = activeThoughtTag === t ? null : t;
+  renderThoughts();
+}
+
+function openNewThought() {
+  document.getElementById("rawThoughtInput").value = "";
+  openModal("newThoughtModal");
+}
+function manualCreateThought() {
+  const pre = document.getElementById("rawThoughtInput").value.trim();
+  closeModal("newThoughtModal");
+  thoughtEditingId = null;
+  fillThoughtForm({ text: pre, tags: [] });
+  document.getElementById("thoughtEditModalTitle").textContent = "手动填写";
+  openModal("thoughtEditModal");
+}
+
+const AI_THOUGHT_PROMPT = `你是一个中文文字润色助手。用户会给你一句话（他的一个想法/原则/态度）。请帮他改得更精简、更通顺、更有力，但必须保留原意和全部关键信息，不要扩大也不要缩小他的意思。
+
+严格输出 JSON（不要 markdown 代码块，不要多余文字），字段如下：
+{
+  "original": "原句，原样照抄，不做任何修改",
+  "options": [
+    { "label": "精简", "text": "比原句更短的版本，去掉冗余字词，意思不变" },
+    { "label": "通顺", "text": "重心放在句子连贯自然、读起来顺，可以调整语序" },
+    { "label": "有力", "text": "重心放在语气坚定、有力量感，像一句原则/宣言" }
+  ]
+}
+要求：
+- 三个选项都要真正不一样，不能只是换几个字。
+- 每个选项都是一句话，不要拆成多句，不要加解释、不要加标题、不要写"版本一"这类前缀。
+- 保留第一人称"我"的视角。
+- 不要鸡汤、不要浮夸、不要用"务必""时刻""永远"这类空泛强调词。`;
+
+async function aiGenerateThought() {
+  const raw = document.getElementById("rawThoughtInput").value.trim();
+  if (!raw) { toast("先写下一句话"); return; }
+  const s = loadSettings();
+  if (!s.apiBase || !s.apiKey || !s.model) {
+    toast("请先在「设置」里配置 AI 接口，或改用「手动填写」");
+    return;
+  }
+  const btn = document.getElementById("aiThoughtGenBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-dots">AI 改写中</span>';
+  try {
+    const res = await fetch(s.apiBase.replace(/\/+$/,"") + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + s.apiKey },
+      body: JSON.stringify({
+        model: s.model,
+        messages: [
+          { role: "system", content: AI_THOUGHT_PROMPT },
+          { role: "user", content: raw }
+        ],
+        temperature: 0.7
+      })
+    });
+    if (!res.ok) throw new Error("API 返回 " + res.status);
+    const data = await res.json();
+    let text = data.choices[0].message.content.trim();
+    text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    const parsed = JSON.parse(text);
+    showThoughtOptions(parsed.original || raw, parsed.options || []);
+  } catch (err) {
+    toast("AI 生成失败：" + err.message + "，可改用手动填写");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "✨ AI 帮我想几个版本";
+  }
+}
+
+/* 把 AI 选项列出来让用户挑；都不满意就保留原句 */
+function showThoughtOptions(original, options) {
+  const list = document.getElementById("thoughtOptList");
+  const items = [{ label: "原句", text: original }].concat(
+    options.filter(o => o && o.text && o.text !== original)
+  );
+  list.innerHTML = items.map((o, i) =>
+    `<button class="opt-item" onclick="pickThoughtOption(${i})">
+      <span class="opt-badge">${esc(o.label || ("版本" + (i+1)))}</span>${esc(o.text)}
+    </button>`).join("");
+  window._thoughtOptions = items;
+  closeModal("newThoughtModal");
+  openModal("thoughtOptModal");
+}
+function pickThoughtOption(i) {
+  const opt = (window._thoughtOptions || [])[i];
+  if (!opt) return;
+  closeModal("thoughtOptModal");
+  thoughtEditingId = null;
+  fillThoughtForm({ text: opt.text, tags: [] });
+  document.getElementById("thoughtEditModalTitle").textContent =
+    opt.label === "原句" ? "保留原句（可再微调）" : `采用「${opt.label}」版本（可再微调）`;
+  openModal("thoughtEditModal");
+}
+function keepOriginalThought() {
+  const orig = (window._thoughtOptions || []).find(o => o.label === "原句");
+  closeModal("thoughtOptModal");
+  thoughtEditingId = null;
+  fillThoughtForm({ text: orig ? orig.text : "", tags: [] });
+  document.getElementById("thoughtEditModalTitle").textContent = "保留原句（可再微调）";
+  openModal("thoughtEditModal");
+}
+
+function fillThoughtForm(c) {
+  document.getElementById("t_text").value = c.text || "";
+  document.getElementById("t_tags").value = (c.tags || []).join(",");
+}
+function saveThought() {
+  const text = document.getElementById("t_text").value.trim();
+  if (!text) { toast("写点内容再保存"); return; }
+  const data = {
+    text,
+    tags: document.getElementById("t_tags").value.split(/[,，]/).map(t => t.trim()).filter(Boolean)
+  };
+  if (thoughtEditingId) {
+    const c = cards.find(x => x.id === thoughtEditingId);
+    Object.assign(c, data, { updated: Date.now() });
+    toast("已更新");
+  } else {
+    cards.push({ id: "c" + Date.now().toString(36), kind: "thought", date: today(),
+      created: Date.now(), updated: Date.now(), baseCount: 0, reviews: [], ...data });
+    toast("已存下来");
+  }
+  saveCards(cards);
+  scheduleSyncPush();
+  closeModal("thoughtEditModal");
+  renderThoughts();
+}
+function editThought(id) {
+  const c = cards.find(x => x.id === id);
+  if (!c) return;
+  thoughtEditingId = id;
+  fillThoughtForm(c);
+  closeModal("thoughtDetailModal");
+  document.getElementById("thoughtEditModalTitle").textContent = "编辑";
+  openModal("thoughtEditModal");
+}
+function openThoughtDetail(id) {
+  const c = cards.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById("thoughtDetailModalBody").innerHTML = `
+    <div class="thought-quote">${esc(c.text)}</div>
+    <div class="modal-date" style="margin:14px 0 0">
+      ${esc(c.date)}${(c.tags||[]).length ? " · " + (c.tags||[]).map(t => esc(t)).join(" / ") : ""}
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="deleteThought('${c.id}')">删除</button>
+      <button class="btn" onclick="editThought('${c.id}')">编辑</button>
+    </div>
+  `;
+  openModal("thoughtDetailModal");
+}
+function deleteThought(id) {
+  if (!confirm("确定删除这句话？")) return;
+  removeCard(id);
+  closeModal("thoughtDetailModal");
+  renderThoughts();
+  toast("已删除");
 }
 
 /* ================= 每日回顾 ================= */
@@ -1594,6 +1918,9 @@ function importData(e) {
       saveCards(cards);
       scheduleSyncPush();
       renderLibrary();
+      renderPrinciples();
+      renderThoughts();
+      renderRules();
       toast("导入成功，新增 " + fresh.length + " 张");
     } catch (err) { toast("导入失败：" + err.message); }
   };
@@ -1602,7 +1929,12 @@ function importData(e) {
 }
 
 /* ================= 启动 ================= */
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
 renderLibrary();
+renderPrinciples();
+renderThoughts();
 initSync(); // 启动时与云端双向合并
 </script>
 </body>
