@@ -94,6 +94,48 @@ const SCHEMA = `
     data TEXT NOT NULL DEFAULT '{}',
     updated INTEGER DEFAULT 0
   );
+
+  -- 雅思：听力/阅读按场景记的生词与句子
+  CREATE TABLE IF NOT EXISTS ielts_notes (
+    id TEXT PRIMARY KEY,
+    kind TEXT NOT NULL DEFAULT '',   -- listening | reading
+    scene TEXT NOT NULL DEFAULT '',  -- 场景名
+    type TEXT NOT NULL DEFAULT '',   -- word | sentence
+    text TEXT NOT NULL DEFAULT '',
+    note TEXT DEFAULT '',
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_ielts_notes ON ielts_notes(kind, scene);
+
+  -- 雅思：口语题目（Part 1/2/3）
+  CREATE TABLE IF NOT EXISTS ielts_speaking (
+    id TEXT PRIMARY KEY,
+    part TEXT NOT NULL DEFAULT '',
+    question TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'new', -- new | practicing | fluent
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
+
+  -- 雅思：口语作答（多次录音，存转写文字与时长）
+  CREATE TABLE IF NOT EXISTS ielts_attempts (
+    id TEXT PRIMARY KEY,
+    qid TEXT NOT NULL DEFAULT '',
+    text TEXT DEFAULT '',
+    seconds INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_ielts_attempts ON ielts_attempts(qid);
+
+  -- 雅思：写作练习（Task1 按题型 / Task2 按话题 x 题型）
+  CREATE TABLE IF NOT EXISTS ielts_writing (
+    id TEXT PRIMARY KEY,
+    task TEXT NOT NULL DEFAULT '',   -- task1 | task2
+    topic TEXT DEFAULT '',           -- task2 话题
+    qtype TEXT DEFAULT '',           -- 题型
+    title TEXT DEFAULT '',           -- 题目/图表描述
+    content TEXT DEFAULT '',         -- 正文
+    created_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
 `;
 
 type SqlValue = string | number | null;

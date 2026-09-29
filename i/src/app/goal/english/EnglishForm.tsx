@@ -221,7 +221,7 @@ export default function EnglishForm() {
   const targetOptions = TARGETS[form.exam] ?? TARGETS["四级"];
 
   return (
-    <div className="relative mx-auto flex h-[100dvh] max-w-lg flex-col">
+    <div className="relative mx-auto flex h-[100dvh] w-full max-w-5xl flex-col">
       {/* 顶部：返回 + 进度 */}
       <div className="flex items-center gap-3 px-5 pt-5">
         <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">

@@ -250,7 +250,7 @@ export default function FitnessForm() {
 
   // 主页面：两个板块 ——「我的计划」+「制定新计划」
   return (
-    <div className="mx-auto max-w-lg px-5 pb-32 pt-5">
+    <div className="mx-auto w-full max-w-5xl px-6 pb-32 pt-6">
       <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
         ← 返回
       </Link>
@@ -499,7 +499,7 @@ function FormBody({
 
       {/* 底部固定提交条 */}
       <div className="fixed inset-x-0 bottom-0 border-t border-zinc-800/60 bg-zinc-950/90 px-5 pb-6 pt-3 backdrop-blur">
-        <div className="mx-auto max-w-lg">
+        <div className="mx-auto w-full max-w-5xl">
           <button
             onClick={submit}
             disabled={!canSubmit}

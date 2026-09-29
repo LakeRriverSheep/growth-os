@@ -24,7 +24,7 @@ export default function EnglishPlanView({ plan, onRestart }: { plan: EnglishPlan
   const totalMinutes = daily.reduce((s, t) => s + t.minutes, 0);
 
   return (
-    <div className="mx-auto max-w-lg px-5 pb-16 pt-6">
+    <div className="mx-auto w-full max-w-5xl px-6 pb-16 pt-6">
       <Link href="/" className="text-sm text-zinc-500 hover:text-zinc-300">
         ←
       </Link>

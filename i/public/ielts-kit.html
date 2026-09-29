@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>雅思8分备考 · 词汇模板勾选工具</title>
+<style>
+:root{
+  --green:#0F6E56;--green-l:#E1F5EE;--coral:#D85A30;--coral-l:#FAECE7;
+  --amber:#EF9F27;--amber-l:#FAEEDA;--blue:#185FA5;--blue-l:#E6F1FB;
+  --purple:#534AB7;--purple-l:#EEEDFE;--bg:#f5f5f5;--card:#fff;
+  --text:#1a1a2e;--muted:#666;--border:#ddd;--done:#999;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Segoe UI','Noto Sans SC',sans-serif;background:var(--bg);color:var(--text);line-height:1.7;font-size:14px}
+nav{position:sticky;top:0;z-index:100;background:#1a1a2e;padding:10px 16px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+nav a{color:#fff;text-decoration:none;padding:5px 12px;border-radius:5px;font-size:13px;font-weight:500;transition:.2s}
+nav a:hover{background:rgba(255,255,255,.15)}
+nav a.on{background:var(--green)}
+.progress-bar{margin-left:auto;display:flex;align-items:center;gap:8px;color:#fff;font-size:13px}
+.progress-bar .bar{width:120px;height:8px;background:rgba(255,255,255,.2);border-radius:4px;overflow:hidden}
+.progress-bar .fill{height:100%;background:var(--green);transition:width .3s}
+.section{max-width:960px;margin:0 auto;padding:24px 16px}
+.sec-header{margin-bottom:20px;padding-bottom:12px;border-bottom:3px solid var(--green)}
+.sec-header h2{font-size:22px;font-weight:700;margin-bottom:4px}
+.sec-header p{color:var(--muted);font-size:13px}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;margin-left:6px}
+.b8{background:var(--green-l);color:var(--green)}
+.cat-title{font-size:17px;font-weight:600;margin:20px 0 10px;padding-left:10px;border-left:4px solid var(--green)}
+.cat-title.coral{border-color:var(--coral)}
+.cat-title.amber{border-color:var(--amber)}
+.cat-title.blue{border-color:var(--blue)}
+.cat-title.purple{border-color:var(--purple)}
+.vocab-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:8px;transition:.15s}
+.vocab-card:hover{box-shadow:0 2px 6px rgba(0,0,0,.06)}
+.vocab-row{display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-bottom:1px solid #f0f0f0}
+.vocab-row:last-child{border-bottom:none}
+.vocab-row.done{opacity:.45}
+.vocab-row.done .word{text-decoration:line-through;color:var(--done)}
+.cb{width:18px;height:18px;flex-shrink:0;margin-top:2px;cursor:pointer;accent-color:var(--green)}
+.word{font-weight:600;font-size:14px;min-width:120px}
+.pos{color:var(--coral);font-style:italic;font-size:12px;min-width:40px}
+.syn{color:var(--muted);font-size:13px;flex:1}
+.zh{font-size:12px;color:#888;min-width:80px}
+.tpl-block{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px 18px;margin-bottom:10px}
+.tpl-block h4{font-size:15px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.tpl-sentence{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid #f0f0f0;align-items:flex-start}
+.tpl-sentence:last-child{border-bottom:none}
+.tpl-sentence.done{opacity:.45}
+.tpl-num{width:22px;height:22px;border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;margin-top:1px}
+.tpl-en{flex:1;font-size:14px}
+.tpl-en .slot{background:var(--amber-l);padding:1px 5px;border-radius:3px;color:var(--amber);font-style:italic;font-weight:600}
+.gram{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:600;background:var(--purple-l);color:var(--purple);margin-left:4px}
+.tpl-zh{font-size:12px;color:var(--muted);margin-top:2px}
+.chip{display:inline-block;padding:4px 12px;border-radius:16px;font-size:13px;font-weight:500;border:1px solid;margin:3px;cursor:pointer;transition:.15s}
+.chip:hover{opacity:.8}
+.chip.done{opacity:.4;text-decoration:line-through}
+.chip.g{background:var(--green-l);color:var(--green);border-color:var(--green)}
+.chip.c{background:var(--coral-l);color:var(--coral);border-color:var(--coral)}
+.chip.a{background:var(--amber-l);color:var(--amber);border-color:var(--amber)}
+.chip.b{background:var(--blue-l);color:var(--blue);border-color:var(--blue)}
+.chip.p{background:var(--purple-l);color:var(--purple);border-color:var(--purple)}
+.chip.gray{background:#f0f0f0;color:#555;border-color:#ccc}
+.info{border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px}
+.info.tip{background:var(--green-l);border-left:3px solid var(--green)}
+.info.warn{background:var(--coral-l);border-left:3px solid var(--coral)}
+.info.note{background:var(--blue-l);border-left:3px solid var(--blue)}
+.info b{display:block;margin-bottom:2px}
+.filter-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.filter-bar button{padding:4px 12px;border:1px solid var(--border);border-radius:5px;background:#fff;cursor:pointer;font-size:13px;transition:.15s}
+.filter-bar button.on{background:var(--green);color:#fff;border-color:var(--green)}
+.filter-bar button:hover{opacity:.8}
+.stats{display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 18px;text-align:center;min-width:100px}
+.stat-card .num{font-size:24px;font-weight:700;color:var(--green)}
+.stat-card .lbl{font-size:12px;color:var(--muted)}
+.sub-t{font-size:18px;font-weight:600;margin:20px 0 10px;padding-left:10px;border-left:4px solid var(--green)}
+.sub-t.coral{border-color:var(--coral)}
+.sub-t.amber{border-color:var(--amber)}
+.sub-t.blue{border-color:var(--blue)}
+.sub-t.purple{border-color:var(--purple)}
+.divider{height:1px;background:var(--border);margin:20px 0}
+@media(max-width:600px){.word{min-width:80px}.pos{display:none}.zh{display:none}}
+</style>
+</head>
+<body>
+
+<nav id="nav">
+  <a href="#read-noun" data-tab="reading">阅读词汇</a>
+  <a href="#listen-s1" data-tab="listening">听力词汇</a>
+  <a href="#write-t2" data-tab="writing">写作模板</a>
+  <a href="#speak-p1" data-tab="speaking">口语模板</a>
+  <a href="#linking" data-tab="linking">衔接词</a>
+  <a href="#voice" data-tab="voice">嗓音准备</a>
+  <div class="progress-bar">
+    <span id="progressText">0 / 0</span>
+    <div class="bar"><div class="fill" id="progressFill" style="width:0%"></div></div>
+  </div>
+</nav>
+
+<!-- ============ READING ============ -->
+<div class="section" id="read-noun">
+<div class="sec-header">
+<h2>阅读高频同义替换 300+组 <span class="badge b8">目标8+</span></h2>
+<p>雅思阅读核心技能 = 同义替换识别。题目里的词 = 原文换了说法的另一个词。勾选已掌握的组，进度自动保存</p>
+</div>
+
+<div class="stats" id="readingStats"></div>
+
+<div class="filter-bar">
+  <button class="on" data-filter="all" data-section="reading">全部</button>
+  <button data-filter="undone" data-section="reading">未掌握</button>
+  <button data-filter="done" data-section="reading">已掌握</button>
+  <button data-filter="reset" data-section="reading">重置</button>
+</div>
+
+<div class="cat-title">名词类 Nouns</div>
+<div class="vocab-card" id="reading-list-noun"></div>
+
+<div class="cat-title coral">动词类 Verbs</div>
+<div class="vocab-card" id="reading-list-verb"></div>
+
+<div class="cat-title amber">形容词类 Adjectives</div>
+<div class="vocab-card" id="reading-list-adj"></div>
+
+<div class="cat-title blue">逻辑关系类 Logical Relations</div>
+<div class="vocab-card" id="reading-list-logic"></div>
+
+<div class="cat-title purple">阅读话题高频词（按话题分类）</div>
+<div class="vocab-card" id="reading-list-topic"></div>
+</div>
+
+<!-- ============ LISTENING ============ -->
+<div class="section" id="listen-s1">
+<div class="sec-header">
+<h2>听力场景词汇 <span class="badge b8">目标8+</span></h2>
+<p>按 Section 1-4 场景分类，含拼写陷阱。勾选已掌握的词，进度自动保存</p>
+</div>
+
+<div class="stats" id="listeningStats"></div>
+
+<div class="filter-bar">
+  <button class="on" data-filter="all" data-section="listening">全部</button>
+  <button data-filter="undone" data-section="listening">未掌握</button>
+  <button data-filter="done" data-section="listening">已掌握</button>
+  <button data-filter="reset" data-section="listening">重置</button>
+</div>
+
+<div class="cat-title">Section 1 · 住宿租房</div>
+<div class="vocab-card" id="listen-s1-rent"></div>
+
+<div class="cat-title">Section 1 · 银行财务</div>
+<div class="vocab-card" id="listen-s1-bank"></div>
+
+<div class="cat-title">Section 1 · 旅游出行</div>
+<div class="vocab-card" id="listen-s1-travel"></div>
+
+<div class="cat-title">Section 1 · 购物消费</div>
+<div class="vocab-card" id="listen-s1-shop"></div>
+
+<div class="cat-title coral">Section 2 · 地图方向</div>
+<div class="vocab-card" id="listen-s2-map"></div>
+
+<div class="cat-title coral">Section 2 · 活动设施介绍</div>
+<div class="vocab-card" id="listen-s2-activity"></div>
+
+<div class="cat-title amber">Section 3 · 校园学术</div>
+<div class="vocab-card" id="listen-s3-campus"></div>
+
+<div class="cat-title amber">Section 3 · 作业研究讨论</div>
+<div class="vocab-card" id="listen-s3-assign"></div>
+
+<div class="cat-title blue">Section 4 · 学术讲座高频</div>
+<div class="vocab-card" id="listen-s4-academic"></div>
+
+<div class="cat-title blue">Section 4 · 科学环境</div>
+<div class="vocab-card" id="listen-s4-science"></div>
+
+<div class="info warn">
+<b>拼写致命陷阱（必背）</b>
+双写字母：accommodation, committee, address, booking, cancellation, necessary, successful<br>
+英式拼写：programme(≠program), centre, traveller, counsellor, catalogue<br>
+易混淆：conservation(保护) ≠ conversation(对话)；desert(沙漠) ≠ dessert(甜点)<br>
+连字符：self-service, check-in, drop-off, built-in
+</div>
+</div>
+
+<!-- ============ WRITING ============ -->
+<div class="section" id="write-t2">
+<div class="sec-header">
+<h2>写作逐句模板 <span class="badge b8">目标8</span></h2>
+<p>每句有固定位置和语法结构，背熟框架→填入话题内容。勾选已背熟的句子</p>
+</div>
+
+<div class="stats" id="writingStats"></div>
+
+<div class="sub-t">Task 2 大作文 · 万能四段式</div>
+
+<div class="tpl-block">
+<h4>一、开头段 Introduction</h4>
+<div id="wt2-intro"></div>
+</div>
+
+<div class="tpl-block">
+<h4>二、论述段一 Body Paragraph 1（5句结构）</h4>
+<div id="wt2-body1"></div>
+</div>
+
+<div class="tpl-block">
+<h4>三、论述段二 Body Paragraph 2（5句结构，换句式避免重复）</h4>
+<div id="wt2-body2"></div>
+</div>
+
+<div class="tpl-block">
+<h4>四、让步段（可选，2句）</h4>
+<div id="wt2-concede"></div>
+</div>
+
+<div class="tpl-block">
+<h4>五、结论段 Conclusion</h4>
+<div id="wt2-conclu"></div>
+</div>
+
+<div class="info tip">
+<b>开头段备选句型（点击勾选已掌握）</b>
+<div id="wt2-open-opts" style="margin-top:6px"></div>
+</div>
+
+<div class="info note">
+<b>观点表达备选句型</b>
+<div id="wt2-opinion-opts" style="margin-top:6px"></div>
+</div>
+
+<div class="info tip">
+<b>论述段衔接词备选</b>
+<div id="wt2-link-opts" style="margin-top:6px"></div>
+</div>
+
+<div class="info note">
+<b>结论段开头备选</b>
+<div id="wt2-conclu-opts" style="margin-top:6px"></div>
+</div>
+
+<div class="divider"></div>
+
+<div class="sub-t coral">Task 1 小作文 · 图表题模板</div>
+
+<div class="tpl-block">
+<h4>开头段（改写+总览）</h4>
+<div id="wt1-intro"></div>
+</div>
+
+<div class="tpl-block">
+<h4>主体段一（数据描述）</h4>
+<div id="wt1-body1"></div>
+</div>
+
+<div class="tpl-block">
+<h4>主体段二（对比补充）</h4>
+<div id="wt1-body2"></div>
+</div>
+
+<div class="info tip">
+<b>趋势动词替换（点击勾选）</b>
+<div id="wt1-trend" style="margin-top:6px"></div>
+</div>
+</div>
+
+<!-- ============ SPEAKING ============ -->
+<div class="section" id="speak-p1">
+<div class="sec-header">
+<h2>口语逐句模板 <span class="badge b8">目标8+</span></h2>
+<p>Part 1 用ARE法 · Part 2 用PPF法 · Part 3 用逻辑链公式。勾选已背熟的句型</p>
+</div>
+
+<div class="stats" id="speakingStats"></div>
+
+<div class="sub-t">Part 1 · ARE法（Answer-Reason-Example）</div>
+
+<div class="tpl-block">
+<h4>第一句 A = Answer 回应句（按态度分类，脱口而出）</h4>
+<div style="margin-bottom:8px"><b style="color:var(--green)">积极/肯定</b></div>
+<div id="sp1-positive" style="margin-bottom:10px"></div>
+<div style="margin-bottom:8px"><b style="color:var(--amber)">中性/看情况</b></div>
+<div id="sp1-neutral" style="margin-bottom:10px"></div>
+<div style="margin-bottom:8px"><b style="color:var(--coral)">否定/不太同意</b></div>
+<div id="sp1-negative" style="margin-bottom:10px"></div>
+</div>
+
+<div class="tpl-block">
+<h4>第二句 R = Reason 展开句</h4>
+<div id="sp1-reason"></div>
+</div>
+
+<div class="tpl-block">
+<h4>第三句 E = Example/Detail 举例细节句</h4>
+<div id="sp1-example"></div>
+</div>
+
+<div class="tpl-block">
+<h4>第四句 收束/补充句</h4>
+<div id="sp1-close"></div>
+</div>
+
+<div class="info tip">
+<b>Part 1 完整示例（Do you like cooking?）</b><br>
+S1: Oh, definitely. I'm a big fan of cooking.<br>
+S2: I mean, it's a great way to unwind after a long day, which is why I try to cook at least three times a week.<br>
+S3: Actually, just the other day, I made a Thai green curry from scratch, and it turned out surprisingly good.<br>
+S4: So yeah, that's basically why I enjoy it so much.
+</div>
+
+<div class="divider"></div>
+
+<div class="sub-t coral">Part 2 · PPF法（Past-Present-Future）</div>
+
+<div class="tpl-block">
+<h4>开场 + Past 过去（第1-3句）</h4>
+<div id="sp2-past"></div>
+</div>
+
+<div class="tpl-block">
+<h4>Present 现在（第4-7句）</h4>
+<div id="sp2-present"></div>
+</div>
+
+<div class="tpl-block">
+<h4>Future 未来 + 收束（第8-9句）</h4>
+<div id="sp2-future"></div>
+</div>
+
+<div class="info tip">
+<b>Part 2 五个万能故事框架（提前准备，考场灵活套用）</b>
+<div style="margin-top:6px">
+<div style="margin-bottom:4px"><b>1. 人物类：</b>一个老师/长辈/朋友教会了我某个道理 → 适配 describe a person who...</div>
+<div style="margin-bottom:4px"><b>2. 经历类：</b>一次旅行/比赛/挑战让我成长 → 适配 describe an experience/event that...</div>
+<div style="margin-bottom:4px"><b>3. 地点类：</b>一个我去过的城市/餐厅/书店 → 适配 describe a place you visited...</div>
+<div style="margin-bottom:4px"><b>4. 物品类：</b>一件礼物/电子设备/书改变了我的生活 → 适配 describe a gift/object...</div>
+<div><b>5. 抽象类：</b>一个目标/决定/计划对我的影响 → 适配 describe a goal/decision...</div>
+</div>
+</div>
+
+<div class="divider"></div>
+
+<div class="sub-t amber">Part 3 · 深度讨论模板</div>
+
+<div class="tpl-block">
+<h4>第一句：回应句（比Part 1更深思）</h4>
+<div id="sp3-respond"></div>
+</div>
+
+<div class="tpl-block">
+<h4>观点展开（第2-4句）</h4>
+<div id="sp3-develop"></div>
+</div>
+
+<div class="tpl-block">
+<h4>对比/推测（第5-6句）</h4>
+<div id="sp3-compare"></div>
+</div>
+
+<div class="tpl-block">
+<h4>收束句</h4>
+<div id="sp3-close"></div>
+</div>
+
+<div class="info note">
+<b>Part 3 功能性短语（7分+必备，点击勾选）</b>
+<div id="sp3-functional" style="margin-top:6px"></div>
+</div>
+
+<div class="info warn">
+<b>考官反感的NG短语（避免使用）</b>
+"Every coin has two sides" → 用 "There are pros and cons"<br>
+"Broaden my horizons" → 用 "Expand my perspective" / "Learn new things"<br>
+"Last but not least" → 用 "Finally" / "One final point is that"
+</div>
+</div>
+
+<!-- ============ LINKING ============ -->
+<div class="section" id="linking">
+<div class="sec-header">
+<h2>衔接词分类速查 <span class="badge b8">脱口而出</span></h2>
+<p>8分要求衔接自然多样。每类至少能脱口而出3个。点击勾选已掌握的</p>
+</div>
+
+<div class="stats" id="linkingStats"></div>
+
+<div class="tpl-block"><h4>递进/补充</h4><div id="link-add"></div></div>
+<div class="tpl-block"><h4>转折/让步</h4><div id="link-but"></div></div>
+<div class="tpl-block"><h4>举例</h4><div id="link-eg"></div></div>
+<div class="tpl-block"><h4>因果</h4><div id="link-cause"></div></div>
+<div class="tpl-block"><h4>对比</h4><div id="link-contrast"></div></div>
+<div class="tpl-block"><h4>总结/收束</h4><div id="link-sum"></div></div>
+<div class="tpl-block"><h4>思考/犹豫（口语专用）</h4><div id="link-think"></div></div>
+<div class="tpl-block"><h4>强调/个人观点</h4><div id="link-empha"></div></div>
+</div>
+
+<!-- ============ VOICE ============ -->
+<div class="section" id="voice">
+<div class="sec-header">
+<h2>考前嗓音准备 <span class="badge b8">8分发音基础</span></h2>
+<p>放松的声带 = 自然的发音 = 清晰地道。考前15分钟流程</p>
+</div>
+
+<div class="stats" id="voiceStats"></div>
+
+<div class="tpl-block">
+<h4>一、呼吸调整（3分钟）</h4>
+<div id="voice-1"></div>
+</div>
+<div class="tpl-block">
+<h4>二、声带激活（4分钟）</h4>
+<div id="voice-2"></div>
+</div>
+<div class="tpl-block">
+<h4>三、舌头灵活度（3分钟）</h4>
+<div id="voice-3"></div>
+</div>
+<div class="tpl-block">
+<h4>四、语感热身（5分钟）</h4>
+<div id="voice-4"></div>
+</div>
+<div class="info tip">
+<b>发音8分三个核心指标</b>
+1. 元音饱满度：长元音够长（/iː/ vs /ɪ/），双元音有滑动（/eɪ/ 不是 /e/）<br>
+2. 句重音节奏：实词重读、虚词弱读，形成自然节奏<br>
+3. 语调变化：陈述句末降调，疑问句升调，列举前升后降
+</div>
+</div>
+
+<script>
+// =========== DATA ===========
+const DATA = {
+  reading: {
+    noun: [
+      ["access/entrance/entryway","通路、进入"],["route/motorway/highway/expressway","公路"],["boundary/border/edge/outskirts/frontier","边界"],
+      ["proposal/suggestion/recommendation/proposition","提议"],["odour/smell/stench/stink/scent","味道"],["bearing/position/standing","方位"],
+      ["waste/unwanted materials/rubbish/garbage/trash","废物"],["priority/preferential/the most important/overriding","优先"],
+      ["evidence/proof/documentation/written account","证据"],["mistake/error/fault/slip/mix-up","错误"],["collapse/failure/fall","崩塌"],
+      ["fatigue/tiredness/exhaustion/drowsiness","疲劳"],["trial/experiment/test","实验"],["success/achievement/progress/breakthrough/accomplishment","成就"],
+      ["invention/device/creation/innovation","发明"],["farming/agriculture","农业"],["aviation disaster/sky accident/air crash","空难"],
+      ["zone/airspace/region/area/district/quarter/block/suburb","区域"],["weather/meteorological/climate/condition","气候"],
+      ["city/metropolitan/urban/town/civic/municipal/downtown","城市"],["period/cycle/era/age","年代"],
+      ["feeling/emotional response/sensory/a sense of/passion","感觉"],["linguistic/language","语言"],["building/property/construction","建筑"],
+      ["financial support/fund/financial aid","资助"],["stumbling block/difficulty/trouble","麻烦"],
+      ["genius/talent/intellectual/intelligence/brains/brilliant/wisdom","天才"],["cost/financial outlay/spend/charge/fare/rental/toll","支出"],
+      ["immunity/resistance","免疫力"],["assessment/appraisal/evaluation/estimate/judgment","评估"],
+      ["plan/prepare/design","计划"],["dispute/debate/controversy/disagree/argue","争论"],
+      ["altitude/from above the ground/height/how high/level","高度"],["beacon and flashing/light/beam/laser/ray/glow/glare","光"],
+    ],
+    verb: [
+      ["ignore/neglect/bypass/pay no attention/take no notice","忽略"],["change/modify/shift/alter/transfer","改变"],
+      ["protect/guard/safeguard/shield/conservation","保护"],["follow/track/tail/shadow/stalk","跟随"],
+      ["teach/educate/train/coach/instruct/bring up","教学"],["determine/establish/identify/pinpoint/diagnose","确定"],
+      ["differ from/unusual/distinguish/recognize the difference/differentiate","区别"],["consult/ask somebody's advice","咨询"],
+      ["engage/give somebody a job/employ/take on/appoint/recruit/sign up","雇佣"],["combine/mix/stir/blend/whisk","联合"],
+      ["explain/tell/show/demonstrate/go through/shed light on/set out","解释"],["occur/happen/take place/turn up/arise/strike","发生"],
+      ["expand/get bigger/grow/swell up/stretch","扩大"],["emerge/appear/become visible/come into view/come out","出现"],
+      ["generate/form/produce/create/develop/manufacture","产生"],["observe/notice/see/tell/spot/detect/note/perceive","观察"],
+      ["include/consist of/comprise/be composed of/be made up of","包含"],["focus on/deals only with/concentrate","专注"],
+      ["recognize/know/identify/pick out/tell","认出"],["come from/be based on/originate/derive from/grow out of/evolve from","来自于"],
+      ["enable/make possible/allow/permit/pave the way for/clear the way for","使能够"],["predict/anticipate/forecast/foretell/guess in advance/expect","预测"],
+      ["realize/know/become aware/appreciate/be conscious","意识到"],["produce/form/create/generate","生产"],
+      ["guarantee/promise/assure/swear/vow/commit to/pledge","保证"],["bring/confer/award/present/grant/allocate/offer","带来"],
+      ["illustrate/show/demonstrate/mean/reflect/reveal/be a sign","表明"],["disturb/interrupt/bother/distract/put somebody off","打扰"],
+      ["unfold/open/develop/expand","展开"],["persuade/convince/win over/talk around","说服"],
+      ["surrender/give in","投降"],["exaggerate/overstate","夸大"],
+      ["dispose/settle/manage/cope with/deal with","处理"],["postpone/put back/delay/adjourn","推迟"],
+      ["couple with/and/accompany/with","伴随"],["involve/contain/comprise","包含"],
+      ["settle on/make choice of/decide on","选定"],["involve with/associate with/link to/relate to","有关联"],
+      ["release/issue/launch/convey/deliver","发表"],["react/respond","反应"],
+      ["remain/keep/stay/maintain","保持"],["foster/cultivate/raise/nurture","培养"],
+      ["overtake/catch up/sweep over/exceed/overcome","赶上"],["administer/manage/conduct/implement/perform","执行"],
+      ["construct/build/make/found","建造"],["stimulate/encourage/activate/motivate","刺激"],
+      ["vanish/extinct/disappear","消失"],["ignite/light/inflame","点燃"],
+      ["require/desire/order/command","要求"],["operate/act/run","运转"],
+      ["break/shatter/crack","打碎"],["insist/claim/argue/believe/think","坚称"],
+      ["suppress/control/restrain/repress/oppress/inhibit/ban/forbid/stifle","压制"],["speed up/increase speed/quicken up/accelerate","加速"],
+      ["reproduce/copy/replicate/repeat/duplicate","复制"],["improve/grow/get better","进步"],
+      ["catch/exploit/capture","抓捕"],["give up/abandon","放弃"],
+      ["refute/not mean/rebut/deny","反驳"],["fulfill/qualify/achieve/keep/satisfy","完成"],
+      ["prevent/resolve/forbid/stop","防止"],["participate/be involved in/take part in/join","参加"],
+      ["judge/rate/criticize/assess/evaluate/gauge/appraise","评判"],["rely on/depend on","依靠"],
+      ["avoid/stay away/keep away/steer clear of/make a detour","避免"],["die out/extinct/disappear/no longer exist","灭绝"],
+      ["hunt/search for/look for/try to find","搜索"],["perceive/sense/see/spot/become aware of/observe","感知"],
+      ["calculate/measure/work out/figure/estimate","计算"],["coin/invent/make/create/come up with","发明"],
+      ["admit/acknowledge/confess/to tell the truth","承认"],["result in/lead to/cause/give rise to/bring about","导致"],
+      ["address/solve/deal with/handle","处理"],["imitate/copy/impersonate/follow one's example","模仿"],
+      ["memorise/learn/commit to memory","记忆"],["deteriorate/get worse/go down","变坏"],
+      ["conclude/summarize/come to/reach the conclusion","得出结论"],["adapt to/get used to/become accustomed to/adjust to","适应"],
+      ["initiate/start/launch/open/set in motion","开始"],["refer to/mention/allude to/touch on","提到"],
+      ["be divided into/separate/split/break up/break down","分开"],["hinder/hamper/impede","阻碍"],
+      ["exclude/omit/miss out/leave out/drop","排除"],["exchange/share/distribute","分享"],
+      ["convert/modify/transform/adapt/customize","转变"],["monitor/watch/keep an eye on/keep a check on","监视"],
+      ["allocate/distribute/apportion/grant/confer","分配"],["stop/halt/come to a halt","停止"],
+      ["label/display/call/brand/hail","命名"],["apply/use/make use of/exercise/utilize","应用"],
+      ["ensure/make sure/make certain/see to it that","保证"],["deny/refuse/withhold","否认"],
+      ["limit/restrict/confine/constrain","限制"],["encounter/face/confront/meet","遭遇"],
+    ],
+    adj: [
+      ["important/vital/essential/crucial/critical/necessary","重要的"],["exceptional/good/excellent/outstanding/brilliant/impressive","超常的"],
+      ["best/well/greatest/finest/ideal/top/ultimate/optimum","极好的"],["surprised/amazed/astonished/astounded/startled","惊讶的"],
+      ["traditional/old-fashioned/outdated/outmoded/unfashionable","传统的"],["diverse/varied/variety/wide-ranging/mixed","多样的"],
+      ["reluctant/unwilling","勉强的"],["long-term/lasting/lifelong/prolonged/enduring","长期的"],
+      ["beneficial/wholesome/nutritious/nourishing/healthful","有益的"],["specific/explicit/elaborate","具体的"],
+      ["unpredictable/unforeseeable/unexpected","无法预测的"],["objective/impartial/neutral/unbiased","客观的"],
+      ["official/formal/authorized/on record","官方的"],["inadequate/not enough/scarce/insufficient","不足的"],
+      ["basic/fundamental/essential/central/underlying/simple/crude/primitive","基本的"],
+      ["immense/big/major/considerable/great/huge/enormous/tremendous","巨大的"],["abundant/plenty/ample","充裕的"],
+      ["unique/distinct/different/extraordinary/special/particular","独特的"],["current/modern/recent/present","最近的"],
+      ["difficult/demanding/hard/tough","困难的"],["instant/rapid/immediate","立即的"],
+      ["initial/original/premier","最初的"],["positive/optimistic/uplifting","积极的"],
+      ["valuable/precious/worthy","宝贵的"],["widespread/universal/extensive/popular/general","广泛的"],
+      ["potential/possible/underlying/likely/expected/latent","潜在的"],["fragile/delicate/weak/breakable/feeble","脆弱的"],
+      ["remote/distant","遥远的"],["unusual/rare/strange/uncommon","罕见的"],
+      ["ordinary/standard/common/usual/general","普通的"],["interior/inner/inside","内部的"],
+      ["suitable/appropriate/proper/adequate/matching","合适的"],["local/domestic/native/indigenous","当地的"],
+      ["international/global/worldwide","国际的"],["impossible/out of the question/unlikely","不可能的"],
+      ["related/associated","有关联的"],["independent/self-reliant","自立的"],
+      ["lonely/isolated/inaccessible/distant/remote/faraway","隔离的"],["poor/lack of/impoverished","贫穷的"],
+      ["newer/later/recent/present","新的"],["first/initial/early/primary/ancient","最早的"],
+      ["realistic/achievable","现实的"],["visible/disclosed/obvious/noticeable/apparent","可见的"],
+      ["moral/ethical","道德的"],["impressive/greatest/touching/unforgettable","印象深刻的"],
+      ["inaccurate/incorrect/wrong/misleading","不精确的"],["primary/main/large/chief/principal","主要的"],
+      ["radical/nontraditional/new/unconventional","激进的"],["well known/notorious/famous/renowned","著名的"],
+      ["spectacular/impressive/imposing/striking/grand","壮观的"],["severe/serious/stiff/heavy","严重的"],
+      ["hidden/disguised/concealed/veiled","隐藏的"],["advanced/developed/sophisticated/high-tech","先进的"],
+      ["intense/strong/passionate/powerful/fervent","强烈的"],["random/arbitrary/at random","随机的"],
+      ["simultaneous/at the same time/together/at once","同时的"],["uniform/equal/homogeneous","均衡的"],
+      ["revolutionary/original/innovation/fresh/novel","革命的"],["consistent/lasting/constant/unchanging","持续的"],
+      ["stable/constant/steady/fixed/unchanging","稳定的"],["spacious/large/big/huge/vast/enormous/immense","广阔的"],
+      ["careful/elaborate/conscientious/meticulous","认真的"],
+    ],
+    logic: [
+      ["because/because of/for/as/since/in that/on account of","原因"],["so/therefore/thereby/thus/consequently/accordingly/hence","结果"],
+      ["cause/lead to/give rise to/result in/render/make/let","导致"],["result from/derive from/originate from/stem from/attribute to","由…而来"],
+      ["given/considering/concerning/in view of/thanks to/according to","考虑到"],["when/once/as soon as/as long as/if/provided that/unless","条件"],
+      ["while/whereas/on the other hand","对比"],["but/nevertheless/however/yet/although/despite/even though","转折"],
+      ["ask/support/push/stimulate/spark/spur/fuel/contribute to","促成"],
+    ],
+    topic: [
+      ["curriculum/syllabus/course of study/program","课程（教育）"],["pedagogy/teaching method/instructional approach","教学法"],
+      ["compulsory/mandatory/obligatory/required","强制的（教育）"],["literacy/reading ability/competence","识字能力"],
+      ["contamination/pollution/taint/impurity","污染（环境）"],["ecosystem/ecological system/habitat","生态系统"],
+      ["sustainable/renewable/viable/enduring","可持续的（环境）"],["biodiversity/biological variety/species richness","生物多样性"],
+      ["emission/discharge/release/output","排放（环境）"],["degradation/deterioration/decline","退化"],
+      ["conserve/preserve/protect/safeguard","保护"],["adverse/harmful/detrimental/unfavorable","不利的"],
+      ["innovation/novelty/breakthrough/advancement","创新（科技）"],["automation/mechanization/computerization","自动化"],
+      ["obsolete/outdated/outmoded/antiquated","过时的"],["feasible/practical/viable/achievable","可行的"],
+      ["demographic/population-related","人口的（社会）"],["urbanization/city growth/metropolitan expansion","城市化"],
+      ["segregation/separation/division/isolation","隔离"],["prejudice/bias/discrimination/preconception","偏见"],
+      ["disparity/gap/inequality/difference","差距"],["cohesion/unity/solidarity","凝聚力"],
+      ["chronic/long-term/persistent/ongoing","慢性的（医学）"],["epidemic/outbreak/plague","流行病"],
+      ["vulnerable/susceptible/at risk/defenseless","脆弱的（医学）"],["rehabilitation/recovery/restoration/healing","康复"],
+      ["demonstrate/show/prove/illustrate/reveal","证明（学术动词）"],["investigate/examine/explore/look into","调查"],
+      ["corroborate/confirm/verify/support/validate","证实"],["contradict/disprove/challenge/oppose","反驳"],
+      ["advocate/support/promote/endorse/favor","提倡"],["undermine/weaken/sabotage/compromise","削弱"],
+      ["facilitate/ease/assist/help/enable","促进"],["fluctuate/vary/oscillate/rise and fall","波动"],
+    ],
+  },
+
+  listening: {
+    "s1-rent": [
+      ["landlord","房东"],["tenant","租客"],["deposit","押金"],["rent","租金"],["lease","租约"],
+      ["furnished","带家具的"],["unfurnished","不带家具的"],["utility bills","水电费"],["accommodation","住宿"],
+      ["property","房产"],["estate agent","房产中介"],["wardrobe","衣柜"],["balcony","阳台"],["garage","车库"],
+      ["refrigerator","冰箱"],["vacuum cleaner","吸尘器"],["maintenance","维修"],["shared flat","合租公寓"],
+      ["homestay","寄宿家庭"],["youth hostel","青年旅舍"],["en suite","独立卫浴"],["studio","单间公寓"],
+      ["single/double room","单/双人间"],["tenant agreement","租房合同"],["council tax","市政税"],
+      ["agency fee","中介费"],["layout","布局"],["environment","环境"],["rental price","租金"],
+      ["rules and regulations","规定"],["homestay family","寄宿家庭"],
+    ],
+    "s1-bank": [
+      ["savings account","储蓄账户"],["debit card","借记卡"],["credit card","信用卡"],["interest rate","利率"],
+      ["overdraft","透支"],["installment","分期付款"],["scholarship","奖学金"],["tuition fee","学费"],
+      ["statement","对账单"],["transfer","转账"],["currency exchange","货币兑换"],["deposit","存款"],
+      ["withdraw","取款"],["PIN number","密码"],["balance","余额"],["cheque","支票"],
+      ["loan","贷款"],["mortgage","房贷"],["insurance","保险"],["receipt","收据"],
+    ],
+    "s1-travel": [
+      ["itinerary","行程"],["accommodation","住宿"],["excursion","短途旅行"],["souvenir","纪念品"],
+      ["departure","出发"],["arrival","到达"],["luggage","行李"],["passport","护照"],["visa","签证"],
+      ["currency","货币"],["reservation","预订"],["tour guide","导游"],["return ticket","往返票"],
+      ["single ticket","单程票"],["boarding pass","登机牌"],["platform","站台"],["coach","长途大巴"],
+      ["underground","地铁"],["luggage allowance","行李限额"],["check-in","值机"],["departure lounge","候机厅"],
+      ["duty-free","免税"],["destination","目的地"],["travel agency","旅行社"],["peak season","旺季"],
+      ["off-season","淡季"],["travel insurance","旅行保险"],
+    ],
+    "s1-shop": [
+      ["retail","零售"],["discount","折扣"],["refund","退款"],["receipt","收据"],["warranty","保修"],
+      ["installment","分期"],["in stock","有货"],["out of stock","缺货"],["delivery","配送"],
+      ["bargain","便宜货/砍价"],["retail price","零售价"],["special offer","特价"],["coupon","优惠券"],
+      ["exchange","换货"],["customer service","客服"],["fitting room","试衣间"],
+    ],
+    "s2-map": [
+      ["opposite","对面"],["adjacent to","相邻"],["next to","旁边"],["in front of","前面"],
+      ["behind","后面"],["parallel to","平行于"],["at the end of","尽头"],["on the corner of","转角"],
+      ["turn left/right","左/右转"],["go straight on","直走"],["junction","路口"],["intersection","十字路口"],
+      ["roundabout","环岛"],["pedestrian crossing","人行横道"],["north/south/east/west","东南西北"],
+      ["entrance","入口"],["exit","出口"],["car park","停车场"],["fountain","喷泉"],["reception","前台"],
+    ],
+    "s2-activity": [
+      ["reception","接待处"],["lobby","大堂"],["cafeteria","自助餐厅"],["auditorium","礼堂"],
+      ["exhibition","展览"],["workshop","工作坊"],["seminar","研讨会"],["schedule","时间表"],
+      ["register","注册"],["membership","会员"],["facility","设施"],["renovation","翻新"],
+      ["timetable","时刻表"],["opening hours","营业时间"],["admission","门票"],["concession","优惠票"],
+      ["annual pass","年卡"],["visitors","访客"],["guided tour","导览"],
+    ],
+    "s3-campus": [
+      ["enrolment","注册"],["orientation","新生入学引导"],["semester","学期"],["assignment","作业"],
+      ["timetable","课表"],["laboratory","实验室"],["tutorial","辅导课"],["supervisor","导师"],
+      ["deadline","截止日期"],["lecture","讲座"],["seminar","研讨课"],["course outline","课程大纲"],
+      ["reference book","参考书"],["student ID","学生证"],["campus map","校园地图"],["tutor","导师"],
+      ["faculty","学院/系"],["scholarship","奖学金"],["credit","学分"],["attendance","出勤"],
+      ["extension","延期"],["plagiarism","抄袭"],["feedback","反馈"],
+    ],
+    "s3-assign": [
+      ["assignment","作业"],["dissertation","学位论文"],["methodology","方法论"],["questionnaire","问卷"],
+      ["literature review","文献综述"],["hypothesis","假设"],["sample","样本"],["variable","变量"],
+      ["statistics","统计数据"],["bibliography","参考书目"],["research","研究"],["experiment","实验"],
+      ["data","数据"],["conclusion","结论"],["presentation","展示"],["academic paper","学术论文"],
+      ["thesis","论文"],["interview","访谈"],["observation","观察"],["analysis","分析"],
+      ["draft","草稿"],["revise","修改"],["submit","提交"],["word count","字数"],
+    ],
+    "s4-academic": [
+      ["agriculture","农业"],["architecture","建筑学"],["geology","地质学"],["marine","海洋的"],
+      ["fossil","化石"],["species","物种"],["evolution","进化"],["manufacturing","制造业"],
+      ["sociological","社会学的"],["psychological","心理学的"],["conservation","保护"],["extinction","灭绝"],
+      ["colony","群体/殖民地"],["habitat","栖息地"],["migration","迁徙"],["reproduction","繁殖"],
+      ["adaptation","适应"],["biodiversity","生物多样性"],["ecosystem","生态系统"],["sustainable","可持续的"],
+      ["phenomenon","现象"],["significant","显著的"],["formula","公式"],["theory","理论"],
+      ["procedure","程序"],["outcome","结果"],["framework","框架"],["concept","概念"],
+    ],
+    "s4-science": [
+      ["carbon","碳"],["emission","排放"],["greenhouse effect","温室效应"],["deforestation","森林砍伐"],
+      ["renewable energy","可再生能源"],["solar power","太阳能"],["wind power","风能"],["fossil fuel","化石燃料"],
+      ["climate change","气候变化"],["glacier","冰川"],["sea level","海平面"],["drought","干旱"],
+      ["flood","洪水"],["erosion","侵蚀"],["salinity","盐度"],["temperature","温度"],
+      ["atmosphere","大气层"],["oxygen","氧气"],["nitrogen","氮"],["carbon dioxide","二氧化碳"],
+      ["ozone layer","臭氧层"],["ultraviolet","紫外线的"],["radiation","辐射"],["catalyst","催化剂"],
+    ],
+  },
+
+  writing: {
+    "wt2-intro": [
+      ["It is widely argued that [话题背景改写], a topic that has sparked considerable public debate in recent years.","改写题目：同义词替换+引发讨论","被动语态+定语从句"],
+      ["While some people contend that [对立观点], I firmly believe that [你的核心立场].","给出双方立场+明确表态","While让步状语从句+宾语从句"],
+    ],
+    "wt2-body1": [
+      ["The primary reason supporting this view is that [核心论点].","主题句：一句话说清楚论证什么","主语从句"],
+      ["This is largely because [原因解释], which means that [进一步推论].","解释句：展开为什么成立","表语从句+非限制性定语从句"],
+      ["A compelling illustration of this can be seen in [具体例子], where [细节描述].","举例句","被动语态+where定语从句"],
+      ["Consequently, not only does this [直接后果], but it also [间接后果].","分析句：说明结果","Not only倒装句"],
+      ["Therefore, it is evident that [段落小结，呼应论点].","小结句","形式主语it+表语从句"],
+    ],
+    "wt2-body2": [
+      ["A further point worth considering is that [第二个论点].","主题句（换句式）","主语后置结构"],
+      ["To be more specific, [展开解释], thereby [V-ing 结果].","解释句（换展开方式）","thereby+分词作结果状语"],
+      ["Take [例子主体] as an example. [描述例子].","举例句（换引出方式）","祈使句+简单句"],
+      ["Such evidence clearly demonstrates that [分析结论].","分析句","宾语从句"],
+      ["Thus, [段落小结], further reinforcing the argument that [呼应核心立场].","小结句","分词作伴随状语+同位语从句"],
+    ],
+    "wt2-concede": [
+      ["Admittedly, it could be argued that [对立观点的合理之处].","让步句：承认对方有道理","被动语态+宾语从句"],
+      ["However, this perspective overlooks the fact that [反驳关键点], which ultimately renders it less convincing.","转折句：用However反驳","同位语从句+which定语从句"],
+    ],
+    "wt2-conclu": [
+      ["In conclusion, although [对立观点简述], I am convinced that [重申你的立场].","总结句：重申立场","让步状语从句+被动语态"],
+      ["Moving forward, it is imperative that [建议/展望] in order to [期望达到的目标].","升华句","虚拟语气+目的状语"],
+    ],
+    "wt2-open-opts": [
+      "Many people claim/opine/believe that…","There is no denying that…","It is often said that…",
+      "These days… / Nowadays… / In this day and age…","People are divided in their opinion regarding…",
+      "…is one of the most important issues…","Whether…or…is a controversial issue…",
+    ],
+    "wt2-opinion-opts": [
+      "In my opinion…","I strongly opine that…","I strongly agree with the idea that…",
+      "From my point of view…","As far as I am concerned…","From my perspective…",
+      "To my way of thinking…","It seems to me that…","I wholeheartedly believe that…",
+    ],
+    "wt2-link-opts": [
+      "First and foremost…","To begin with…","Furthermore… / Moreover…",
+      "In addition… / What's more…","On the one hand… / On the other hand…",
+      "For instance… / For example…","As a result… / Consequently…","Therefore… / Thus… / Hence…",
+      "However… / Nevertheless… / Nonetheless…","Having said that… / That said…",
+    ],
+    "wt2-conclu-opts": [
+      "In conclusion…","To sum up…","To conclude…","All in all…","Overall…",
+      "Taking everything into consideration…","Weighing up both sides of the argument…",
+      "All things considered…","By and large…",
+    ],
+    "wt1-intro": [
+      ["The [chart/graph/table] illustrates [图表内容改写] from [起始年份] to [结束年份].","改写题目","主谓宾+介词短语"],
+      ["Overall, it is immediately apparent that [最显著趋势1], while [最显著趋势2].","总览句（必须有）","形式主语+while对比状语"],
+    ],
+    "wt1-body1": [
+      ["Looking at the details, [类别A] started at [起始数据] in [年份], before [V-ing 变化] to reach a peak of [峰值] in [年份].","描述一个类别完整变化","before+V-ing+不定式表结果"],
+      ["By contrast, [类别B] experienced a different trajectory, [V-ing 变化] from [起始] to [终止].","用By contrast引入对比","分词作伴随状语"],
+      ["It is also worth noting that [交叉点/特殊数据], which occurred in [时间].","补充交叉点","形式主语+which定语从句"],
+    ],
+    "wt1-body2": [
+      ["As for [类别C], the figures remained relatively [stable/low] throughout the period, hovering at around [数据].","描述变化不大的类别","分词作伴随状语"],
+      ["Meanwhile, [类别D] saw a [gradual/significant] [rise/fall], ending at [最终数据].","描述另一类别变化","主语拟人化(saw)+分词作状语"],
+    ],
+    "wt1-trend": [
+      "rise → increase → grow → climb → surge → soar","fall → decline → decrease → drop → dip → plummet",
+      "fluctuate → oscillate → experience volatility","remain stable → level off → plateau → hover at",
+      "approximately → roughly → around → nearly → just over → slightly under",
+    ],
+  },
+
+  speaking: {
+    "sp1-positive": [
+      "Yes, absolutely.","Definitely, yeah.","For sure, I'd say so.",
+      "Oh, definitely. I'm a big fan of that.","Yes, without a doubt.",
+      "Oh yeah, all the time.","Most certainly, yes.",
+    ],
+    "sp1-neutral": [
+      "Well, it really depends.","Hmm, that's an interesting question.",
+      "To be honest, I haven't thought about it much.","Well, I'd say it's a bit of both.",
+      "It varies, to be fair.","I'd say it really comes down to the situation.",
+    ],
+    "sp1-negative": [
+      "Not really, to be honest.","Actually, I wouldn't say so.",
+      "Hmm, not exactly.","Funnily enough, no.",
+      "I'm afraid I'd have to say no.","As a matter of fact, not really.",
+    ],
+    "sp1-reason": [
+      ["I mean, [核心原因/感受], which is why [结果/行为].","用I mean自然过渡","I mean引导+which定语从句"],
+      ["The main reason is that [原因], so [结果].","直接给原因","表语从句+so并列"],
+      ["Basically, I think it's because [原因], and as a result, [结果].","口语化且有逻辑","because从句+as a result衔接"],
+    ],
+    "sp1-example": [
+      ["For instance, [具体例子], and I [感受/行为].","最万能举例","For instance引导+并列"],
+      ["Take [具体事物] as an example — [描述].","换一种举例","祈使句+破折号补充"],
+      ["Actually, just the other day, [近期具体经历].","用个人经历举例","时间状语前置"],
+    ],
+    "sp1-close": [
+      ["So yeah, that's basically why [重申观点].","口语化收束","So yeah口语收束"],
+      ["But having said that, [补充不同角度].","加转折补充展示灵活性","But having said that转折"],
+    ],
+    "sp2-past": [
+      ["Well, the [person/place/experience] I'd like to talk about is [具体名称].","开场直接切入","定语从句修饰主语"],
+      ["To give you a bit of background, [背景信息: who/where/when].","引入背景","To give you引导"],
+      ["I first [met/saw/experienced] [对象] [时间/地点], and [当时情况].","交代初次接触","一般过去时+并列叙事"],
+    ],
+    "sp2-present": [
+      ["What I find most [interesting/impressive] about [对象] is that [核心特点].","引出核心描述","主语从句+表语从句"],
+      ["And another thing worth mentioning is [第二个特点].","补充第二特点","主语后置结构"],
+      ["In fact, I remember [具体回忆细节], which [影响/感受].","加入细节让叙述生动","remember+V-ing+which定语从句"],
+      ["On top of that, [补充细节], so [结果/影响].","继续补充确保说够2分钟","On top of that递进+so因果"],
+    ],
+    "sp2-future": [
+      ["Looking back on it now, I feel [感受], because [原因].","回顾性感受","分词短语+because从句"],
+      ["So if I had to sum up, I'd say [一句话总结], and I'm really glad [积极收束].","总结收束","虚拟语气+宾语从句"],
+    ],
+    "sp3-respond": [
+      "That's a really thought-provoking question.","Hmm, let me think about this for a moment.",
+      "Well, from my perspective, I'd argue that…","That's a complex issue, and I think…",
+      "To be perfectly honest, I haven't considered this before, but…","I think this is a fascinating point, actually.",
+    ],
+    "sp3-develop": [
+      ["Well, from my perspective, I'd argue that [核心观点], primarily because [原因].","给出观点+原因","宾语从句+primarily because原因从句"],
+      ["For instance, if we look at [领域/国家/群体], we can see that [具体现象].","用具体领域举例","if条件状语+宾语从句"],
+      ["Having said that, I also think it's important to acknowledge that [反面/补充观点].","引入反面展示批判性思维","分词完成式+宾语从句"],
+    ],
+    "sp3-compare": [
+      ["When comparing [A] and [B], I think the key difference lies in [核心差异].","对比句型","When+V-ing+介词短语"],
+      ["And looking ahead, I suppose [对未来趋势预测], though it's hard to say for certain.","预测未来","分词短语+让步状语"],
+    ],
+    "sp3-close": [
+      ["So, taking everything into consideration, I believe [总结观点], but there's certainly more than one way to look at it.","全面收束","分词短语+宾语从句+there be"],
+    ],
+    "sp3-functional": [
+      "In stark contrast to the past, …（与过去形成鲜明对比）","Gone are the days when…, now…（…的时代已一去不复返）",
+      "It is highly probable that…（…的可能性非常高）","I wouldn't be surprised if…（如果…我一点也不惊讶）",
+      "While there are undeniable benefits to X, one must also consider Y.（虽然X有好处，但也必须考虑Y）",
+    ],
+  },
+
+  linking: {
+    "link-add": ["What's more","On top of that","And another thing","Besides","Moreover","Furthermore","In addition","Not only that"],
+    "link-but": ["Having said that","But then again","That said","Admittedly","To be fair","At the same time","Even so","Nevertheless"],
+    "link-eg": ["For instance","Take … as an example","A case in point is","Like, for example","To illustrate","Such as"],
+    "link-cause": ["That's why","So basically","The main reason is that","As a result","Consequently","Therefore","Which is why"],
+    "link-contrast": ["By contrast","On the other hand","Whereas","While","Compared to","Having said that"],
+    "link-sum": ["So yeah, that's basically why","To cut a long story short","All in all","At the end of the day","To sum up","If I had to sum up"],
+    "link-think": ["Well, let me think…","Hmm, that's a good question","Actually, come to think of it","You know what, I think…","Now that I think about it","How should I put this…"],
+    "link-empha": ["I firmly believe that","From my perspective","The way I see it","If you ask me","I'd argue that","Personally speaking"],
+  },
+
+  voice: {
+    "voice-1": [
+      ["腹式呼吸 × 10次：鼻子吸气4秒（肚子鼓起）→ 屏息2秒 → 嘴巴缓慢呼气6秒。放松横膈膜","呼吸基础"],
+      ["叹气法 × 5次：深吸气，用'haaaa'叹出来，从高到低。放松喉咙肌肉","喉咙放松"],
+      ["嘴唇吹气 × 10次：嘴唇放松微闭，用力吹气让嘴唇颤动。放松嘴唇和面部","面部放松"],
+    ],
+    "voice-2": [
+      ["哼鸣 warm-up × 2分钟：闭嘴用'mmm'哼一首旋律，感受嘴唇和鼻腔震动，从低音滑到高音再滑回来","声带预热"],
+      ["元音拉伸 × 2分钟：依次发 /aː/ /iː/ /uː/ /e/ /oʊ/，每个持续5秒。雅思口语清晰度靠元音饱满度","元音训练"],
+    ],
+    "voice-3": [
+      ["绕口令慢速 × 3遍：'She sells seashells by the seashore'，先慢后快，专注每个音的清晰度","发音清晰"],
+      ["舌头伸展 × 10次：舌头尽量伸出→收回，然后左右扫嘴角。放松舌根","舌头灵活"],
+      ["th音专项 × 10次：think, thank, through, although, mother — 舌尖碰上牙齿","th音纠正"],
+    ],
+    "voice-4": [
+      ["大声朗读 × 3分钟：选雅思阅读文章或BBC新闻，大声朗读。句重音落实词，虚词弱读","语感热身"],
+      ["自问自答 × 2分钟：用英文回答简单Part 1问题（如What did you do yesterday?），追求自然流利","英文模式切换"],
+    ],
+  },
+};
+
+// =========== RENDER ===========
+const store = {};
+
+function saveData(){
+  try{ localStorage.setItem('ielts-progress', JSON.stringify(store)); }catch(e){}
+}
+function loadData(){
+  try{ const d = localStorage.getItem('ielts-progress'); if(d) Object.assign(store, JSON.parse(d)); }catch(e){}
+}
+
+function renderVocabList(containerId, items, section, category){
+  const c = document.getElementById(containerId);
+  if(!c) return;
+  let html = '';
+  items.forEach((item, i) => {
+    const key = `${section}__${category}__${i}`;
+    const done = store[key] ? ' done' : '';
+    const checked = store[key] ? 'checked' : '';
+    if(item.length === 2){
+      html += `<div class="vocab-row${done}"><input type="checkbox" class="cb" data-key="${key}" ${checked}><span class="word">${item[0]}</span><span class="syn">${item[1]}</span></div>`;
+    } else {
+      html += `<div class="vocab-row${done}"><input type="checkbox" class="cb" data-key="${key}" ${checked}><span class="word">${item[0]}</span></div>`;
+    }
+  });
+  c.innerHTML = html;
+}
+
+function renderTplList(containerId, items, section, category){
+  const c = document.getElementById(containerId);
+  if(!c) return;
+  let html = '';
+  items.forEach((item, i) => {
+    const key = `${section}__${category}__${i}`;
+    const done = store[key] ? ' done' : '';
+    const checked = store[key] ? 'checked' : '';
+    if(item.length >= 3){
+      html += `<div class="tpl-sentence${done}"><input type="checkbox" class="cb" data-key="${key}" ${checked}><div class="tpl-num">${i+1}</div><div class="tpl-en">${item[0]}<span class="gram">${item[2]}</span><div class="tpl-zh">${item[1]}</div></div></div>`;
+    } else if(item.length === 2){
+      html += `<div class="tpl-sentence${done}"><input type="checkbox" class="cb" data-key="${key}" ${checked}><div class="tpl-num">${i+1}</div><div class="tpl-en">${item[0]}<div class="tpl-zh">${item[1]}</div></div></div>`;
+    }
+  });
+  c.innerHTML = html;
+}
+
+function renderChipList(containerId, items, section, category, chipClass){
+  const c = document.getElementById(containerId);
+  if(!c) return;
+  let html = '';
+  items.forEach((item, i) => {
+    const key = `${section}__${category}__${i}`;
+    const done = store[key] ? ' done' : '';
+    const checked = store[key] ? 'checked' : '';
+    html += `<span class="chip ${chipClass}${done}" data-key="${key}" data-checked="${checked}">${item}</span>`;
+  });
+  c.innerHTML = html;
+}
+
+function renderAll(){
+  // Reading
+  renderVocabList('reading-list-noun', DATA.reading.noun, 'reading', 'noun');
+  renderVocabList('reading-list-verb', DATA.reading.verb, 'reading', 'verb');
+  renderVocabList('reading-list-adj', DATA.reading.adj, 'reading', 'adj');
+  renderVocabList('reading-list-logic', DATA.reading.logic, 'reading', 'logic');
+  renderVocabList('reading-list-topic', DATA.reading.topic, 'reading', 'topic');
+
+  // Listening
+  for(const [key, val] of Object.entries(DATA.listening)){
+    renderVocabList(`listen-${key}`, val, 'listening', key);
+  }
+
+  // Writing
+  for(const [key, val] of Object.entries(DATA.writing)){
+    const el = document.getElementById(key);
+    if(!el) continue;
+    if(key.includes('opts') || key.includes('trend')){
+      renderChipList(key, val, 'writing', key, 'g');
+    } else {
+      renderTplList(key, val, 'writing', key);
+    }
+  }
+
+  // Speaking
+  for(const [key, val] of Object.entries(DATA.speaking)){
+    const el = document.getElementById(key);
+    if(!el) continue;
+    if(['sp1-positive','sp1-neutral','sp1-negative','sp3-respond','sp3-functional'].includes(key)){
+      const cls = key.includes('positive') ? 'g' : key.includes('neutral') ? 'a' : key.includes('negative') ? 'c' : 'b';
+      renderChipList(key, val, 'speaking', key, cls);
+    } else {
+      renderTplList(key, val, 'speaking', key);
+    }
+  }
+
+  // Linking
+  for(const [key, val] of Object.entries(DATA.linking)){
+    renderChipList(key, val, 'linking', key, 'p');
+  }
+
+  // Voice
+  for(const [key, val] of Object.entries(DATA.voice)){
+    renderTplList(key, val, 'voice', key);
+  }
+
+  updateStats();
+}
+
+function updateStats(){
+  const sections = [
+    {name:'reading', label:'阅读', data: DATA.reading},
+    {name:'listening', label:'听力', data: DATA.listening},
+    {name:'writing', label:'写作', data: DATA.writing},
+    {name:'speaking', label:'口语', data: DATA.speaking},
+    {name:'linking', label:'衔接词', data: DATA.linking},
+    {name:'voice', label:'嗓音', data: DATA.voice},
+  ];
+
+  let grandTotal = 0, grandDone = 0;
+
+  sections.forEach(s => {
+    let total = 0, done = 0;
+    for(const [category, items] of Object.entries(s.data)){
+      items.forEach((item, i) => {
+        const key = `${s.name}__${category}__${i}`;
+        total++;
+        if(store[key] === true) done++;
+      });
+    }
+    s.total = total;
+    s.done = done;
+    grandTotal += total;
+    grandDone += done;
+  });
+
+  // Render stats
+  const statsMap = {reading:'readingStats',listening:'listeningStats',writing:'writingStats',speaking:'speakingStats',linking:'linkingStats',voice:'voiceStats'};
+  sections.forEach(s => {
+    const el = document.getElementById(statsMap[s.name]);
+    if(el){
+      el.innerHTML = `
+        <div class="stat-card"><div class="num">${s.done}</div><div class="lbl">${s.label}已掌握</div></div>
+        <div class="stat-card"><div class="num" style="color:var(--muted)">${s.total}</div><div class="lbl">${s.label}总计</div></div>
+        <div class="stat-card"><div class="num" style="color:var(--coral)">${s.total > 0 ? Math.round(s.done/s.total*100) : 0}%</div><div class="lbl">${s.label}进度</div></div>
+      `;
+    }
+  });
+
+  // Update progress bar
+  document.getElementById('progressText').textContent = `${grandDone} / ${grandTotal}`;
+  document.getElementById('progressFill').style.width = grandTotal > 0 ? (grandDone/grandTotal*100) + '%' : '0%';
+}
+
+// Event delegation
+document.addEventListener('click', (e) => {
+  if(e.target.classList.contains('chip')){
+    const key = e.target.dataset.key;
+    store[key] = !store[key];
+    saveData();
+    renderAll();
+  }
+});
+
+document.addEventListener('change', (e) => {
+  if(e.target.classList.contains('cb')){
+    const key = e.target.dataset.key;
+    store[key] = e.target.checked;
+    saveData();
+    renderAll();
+  }
+});
+
+// Filter buttons
+document.addEventListener('click', (e) => {
+  if(e.target.tagName === 'BUTTON' && e.target.dataset.filter){
+    const filter = e.target.dataset.filter;
+    const section = e.target.dataset.section;
+    if(filter === 'reset'){
+      if(confirm(`确定重置${section}的所有勾选记录吗？`)){
+        for(const k in store){
+          if(k.startsWith(section + '__')) delete store[k];
+        }
+        saveData();
+        renderAll();
+      }
+      return;
+    }
+    // Toggle button state
+    e.target.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+    e.target.classList.add('on');
+    // Apply filter
+    const container = e.target.closest('.section');
+    container.querySelectorAll('.vocab-row').forEach(row => {
+      const cb = row.querySelector('.cb');
+      if(!cb) return;
+      const isDone = cb.checked;
+      if(filter === 'all') row.style.display = '';
+      else if(filter === 'done') row.style.display = isDone ? '' : 'none';
+      else if(filter === 'undone') row.style.display = isDone ? 'none' : '';
+    });
+  }
+});
+
+// Nav active state
+document.querySelectorAll('nav a[data-tab]').forEach(a => {
+  a.addEventListener('click', () => {
+    document.querySelectorAll('nav a[data-tab]').forEach(x => x.classList.remove('on'));
+    a.classList.add('on');
+  });
+});
+
+// Init
+loadData();
+renderAll();
+</script>
+</body>
+</html>

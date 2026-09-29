@@ -22,7 +22,7 @@ export default function MePage() {
         <p className="text-xs text-zinc-600">最后更新 {identity.updatedAt}</p>
       </header>
 
-      <main className="mx-auto w-full max-w-xl px-5 pb-16 pt-4">
+      <main className="w-full px-6 pb-16 pt-6">
         <h1 className="text-2xl font-bold tracking-tight">我</h1>
         <p className="mt-1 text-xs text-zinc-500">
           月级更新的身份层。改这里的人是月级的你，不是日级的情绪。
@@ -72,7 +72,7 @@ export default function MePage() {
         {/* ③ 我应该做什么 */}
         <section id="do" className="mt-8 scroll-mt-4 border-t border-zinc-900 pt-6">
           <h2 className="text-sm font-semibold text-zinc-200">③ 我应该做什么</h2>
-          <div className="mt-3 space-y-2.5">
+          <div className="mt-3 grid gap-2.5 lg:grid-cols-2">
             {identity.actions.map((a) => (
               <div
                 key={a.goal}
@@ -88,7 +88,7 @@ export default function MePage() {
         {/* ④ 我不应该做什么 */}
         <section id="not" className="mt-8 scroll-mt-4 border-t border-zinc-900 pt-6">
           <h2 className="text-sm font-semibold text-zinc-200">④ 我不应该做什么</h2>
-          <ul className="mt-3 space-y-2.5">
+          <ul className="mt-3 grid gap-2.5 lg:grid-cols-2">
             {identity.bans.map((b) => (
               <li
                 key={b}

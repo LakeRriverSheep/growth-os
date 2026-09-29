@@ -45,7 +45,7 @@ export default function DietPage() {
         </Link>
       </header>
 
-      <main className="mx-auto w-full max-w-xl px-5 pb-16 pt-4">
+      <main className="w-full px-6 pb-16 pt-6">
         <h1 className="text-2xl font-bold tracking-tight">饮食</h1>
         <p className="mt-1 text-xs text-zinc-500">
           全天搭配与食材库，跟健身计划联动。
@@ -87,12 +87,15 @@ export default function DietPage() {
               </div>
             </div>
 
-            <DietSummaryTable plan={dietPlan} />
-
-            <section>
-              <h2 className="mb-3 text-sm font-semibold text-zinc-200">我的食材库</h2>
-              <FoodLibrarySection />
-            </section>
+            <div className="grid gap-5 lg:grid-cols-2">
+              <div>
+                <DietSummaryTable plan={dietPlan} />
+              </div>
+              <section>
+                <h2 className="mb-3 text-sm font-semibold text-zinc-200">我的食材库</h2>
+                <FoodLibrarySection />
+              </section>
+            </div>
           </div>
         )}
       </main>

@@ -1674,7 +1674,10 @@ export default function PlanView({
         : `${viewDate.getMonth() + 1}/${viewDate.getDate()}`;
 
   return (
-    <div ref={rootRef} className={showHeader ? "mx-auto max-w-lg px-5 pb-16 pt-5" : "pb-4"}>
+    <div
+      ref={rootRef}
+      className={showHeader ? "mx-auto w-full max-w-5xl px-6 pb-16 pt-6" : "w-full pb-4"}
+    >
       {/* 头部（PlanView 自带；首页关闭以避免与外层头部重复） */}
       {showHeader && (
         <div className="flex items-center justify-between">
