@@ -1,0 +1,1609 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="反思卡片">
+<meta name="theme-color" content="#0f1115">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<title>反思卡片库</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --bg-soft: #161a21;
+    --card: #1c212b;
+    --card-hover: #232936;
+    --border: #2a3140;
+    --text: #e8eaf0;
+    --text-dim: #9aa3b2;
+    --text-faint: #6b7280;
+    --accent: #5b8cff;
+    --accent-soft: rgba(91,140,255,.14);
+    --gold: #e8b45a;
+    --green: #4cc38a;
+    --red: #e5636f;
+    --radius: 14px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html { font-size: 16px; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+  /* ---------- Header ---------- */
+  header {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(15,17,21,.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 20px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .logo { font-size: 1.15rem; font-weight: 700; letter-spacing: .5px; }
+  .logo span { color: var(--accent); }
+  .header-stats { color: var(--text-faint); font-size: .82rem; }
+  .header-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn {
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: .88rem;
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--card-hover); border-color: var(--accent); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .btn-primary:hover { filter: brightness(1.12); background: var(--accent); }
+  .btn-gold { background: transparent; border-color: var(--gold); color: var(--gold); }
+  .btn-gold:hover { background: rgba(232,180,90,.1); border-color: var(--gold); }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--text-dim); }
+  .btn-ghost:hover { color: var(--text); background: var(--card); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 80px; }
+
+  /* ---------- Search ---------- */
+  .toolbar { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .search-input {
+    flex: 1; min-width: 200px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: .9rem;
+    outline: none;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .tag-filter { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .tag-chip {
+    font-size: .78rem; padding: 4px 12px; border-radius: 99px;
+    border: 1px solid var(--border); color: var(--text-dim);
+    cursor: pointer; background: transparent; transition: all .15s;
+  }
+  .tag-chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+  /* ---------- Card Grid ---------- */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+  }
+  .rcard {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    cursor: pointer;
+    transition: all .18s;
+    display: flex; flex-direction: column; gap: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  .rcard::before {
+    content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--accent); opacity: .55;
+  }
+  .rcard:hover { background: var(--card-hover); transform: translateY(-2px); border-color: #3a4356; }
+  .rcard-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .rcard-date { font-size: .75rem; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  .rcard-title { font-weight: 700; font-size: 1rem; line-height: 1.4; }
+  .rcard-rule {
+    background: var(--accent-soft);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: .85rem;
+    color: var(--accent);
+    line-height: 1.5;
+  }
+  .rcard-rule::before { content: "⚡ "; }
+  .rcard-event { font-size: .83rem; color: var(--text-dim); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .rcard-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
+  .mini-tag { font-size: .7rem; color: var(--text-faint); background: var(--bg-soft); padding: 2px 8px; border-radius: 99px; }
+  .mastered-badge { color: var(--green); font-size: .72rem; }
+  .count-chip { font-size: .72rem; padding: 2px 9px; border-radius: 99px; font-variant-numeric: tabular-nums; }
+  .count-chip.lv0 { color: var(--text-faint); background: var(--bg-soft); }
+  .count-chip.lv1 { color: var(--accent); background: var(--accent-soft); }
+  .count-chip.lv2 { color: var(--gold); background: rgba(232,180,90,.12); }
+  .count-chip.lv3 { color: var(--green); background: rgba(76,195,138,.12); }
+
+  /* ---------- Board Tabs ---------- */
+  .board-tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+  .board-tab {
+    flex: 1; text-align: center; padding: 10px 0; border-radius: 12px;
+    border: 1px solid var(--border); background: var(--bg-soft);
+    color: var(--text-dim); font-size: .92rem; font-weight: 600;
+    cursor: pointer; transition: all .15s; user-select: none;
+  }
+  .board-tab:hover { background: var(--card); }
+  .board-tab.active[data-board="reflection"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .board-tab.active[data-board="rules"] { background: rgba(76,195,138,.12); border-color: var(--green); color: var(--green); }
+  .board-tab.active[data-board="principle"] { background: rgba(232,180,90,.12); border-color: var(--gold); color: var(--gold); }
+
+  /* ---------- Rule cards ---------- */
+  .rcard.rule-card::before { background: var(--green); }
+  .rcard-scene { font-size: .78rem; color: var(--gold); }
+  .rcard-scene::before { content: "⏰ "; }
+  .rcard-rule-action {
+    background: rgba(76,195,138,.12); border-radius: 8px; padding: 8px 12px;
+    font-size: .85rem; color: var(--green); line-height: 1.5;
+  }
+  .rcard-rule-action::before { content: "📌 "; }
+  .streak-chip {
+    font-size: .72rem; padding: 2px 9px; border-radius: 99px;
+    color: var(--gold); background: rgba(232,180,90,.12);
+    font-variant-numeric: tabular-nums;
+  }
+  .check-btn {
+    margin-top: 4px; width: 100%;
+    border: 1px solid var(--green); background: transparent; color: var(--green);
+    padding: 7px 0; border-radius: 9px; font-size: .85rem; font-weight: 600;
+    cursor: pointer; transition: all .15s;
+  }
+  .check-btn:hover { background: rgba(76,195,138,.12); }
+  .check-btn.done { background: rgba(76,195,138,.18); }
+  .field-value.action-box { background: rgba(76,195,138,.12); color: var(--green); padding: 12px 14px; border-radius: 10px; font-weight: 600; }
+  .preset-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+  .preset-bar .preset-label { font-size: .75rem; color: var(--text-faint); }
+  .preset-chip {
+    font-size: .8rem; padding: 6px 14px; border-radius: 99px;
+    border: 1px dashed var(--border); color: var(--text-dim);
+    background: transparent; cursor: pointer; transition: all .15s;
+  }
+  .preset-chip:hover { border-color: var(--green); color: var(--green); }
+
+  /* ---------- Principle cards ---------- */
+  .rcard.principle-card::before { background: var(--gold); }
+  .rcard-essence {
+    background: rgba(232,180,90,.12); border-radius: 8px; padding: 8px 12px;
+    font-size: .85rem; color: var(--gold); line-height: 1.5;
+  }
+  .rcard-essence::before { content: "💡 "; }
+  .field-value.essence-box { background: rgba(232,180,90,.12); color: var(--gold); padding: 12px 14px; border-radius: 10px; font-weight: 600; }
+
+  .empty-state { text-align: center; padding: 80px 20px; color: var(--text-faint); }
+  .empty-state .big { font-size: 3rem; margin-bottom: 12px; }
+
+  /* ---------- Modal ---------- */
+  .modal-mask {
+    position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,.6);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: flex-start; justify-content: center;
+    padding: 4vh 16px;
+    overflow-y: auto;
+  }
+  .modal-mask.open { display: flex; }
+  .modal {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    width: 100%; max-width: 640px;
+    padding: 26px;
+    animation: pop .2s ease;
+  }
+  @keyframes pop { from { transform: scale(.96); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .modal h2 { font-size: 1.2rem; margin-bottom: 4px; }
+  .modal .modal-date { color: var(--text-faint); font-size: .8rem; margin-bottom: 18px; }
+  .field-block { margin-bottom: 16px; }
+  .field-label {
+    font-size: .75rem; font-weight: 700; letter-spacing: 1px;
+    color: var(--text-faint); text-transform: uppercase;
+    margin-bottom: 5px; display: flex; align-items: center; gap: 6px;
+  }
+  .field-label .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .field-value { font-size: .92rem; line-height: 1.7; white-space: pre-wrap; }
+  .field-value.rule-box { background: var(--accent-soft); color: var(--accent); padding: 12px 14px; border-radius: 10px; font-weight: 600; }
+  .qa-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 560px) { .qa-pair { grid-template-columns: 1fr; } }
+  .qa-box { background: var(--card); border-radius: 10px; padding: 12px 14px; font-size: .86rem; }
+  .qa-box .qa-head { font-size: .72rem; font-weight: 700; margin-bottom: 4px; }
+  .qa-box.assumed .qa-head { color: var(--red); }
+  .qa-box.actual .qa-head { color: var(--green); }
+  .modal-actions { display: flex; gap: 8px; margin-top: 22px; flex-wrap: wrap; justify-content: flex-end; }
+
+  /* ---------- New reflection (input) ---------- */
+  .input-area {
+    width: 100%; min-height: 180px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    padding: 14px;
+    font-size: .95rem;
+    font-family: inherit;
+    line-height: 1.7;
+    resize: vertical;
+    outline: none;
+  }
+  .input-area:focus { border-color: var(--accent); }
+  .edit-input {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 9px 12px;
+    font-size: .88rem;
+    font-family: inherit;
+    line-height: 1.6;
+    outline: none;
+    resize: vertical;
+  }
+  .edit-input:focus { border-color: var(--accent); }
+  textarea.edit-input { min-height: 60px; }
+
+  /* ---------- Review mode ---------- */
+  .review-wrap { max-width: 640px; margin: 0 auto; }
+  .review-progress { text-align: center; color: var(--text-faint); font-size: .82rem; margin-bottom: 14px; }
+  .review-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 28px;
+    animation: pop .25s ease;
+  }
+  .review-actions { display: flex; justify-content: center; gap: 10px; margin-top: 22px; }
+
+  /* ---------- Settings ---------- */
+  .settings-row { margin-bottom: 16px; }
+  .settings-row label { display: block; font-size: .82rem; color: var(--text-dim); margin-bottom: 5px; }
+  .hint { font-size: .78rem; color: var(--text-faint); margin-top: 6px; line-height: 1.6; }
+
+  .toast {
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: var(--card); border: 1px solid var(--border);
+    padding: 10px 22px; border-radius: 99px;
+    font-size: .85rem; z-index: 200;
+    opacity: 0; transition: opacity .25s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+  .loading-dots::after { content: ""; animation: dots 1.2s infinite; }
+  @keyframes dots { 0%{content:""} 25%{content:"."} 50%{content:".."} 75%{content:"..."} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">反思<span>卡片库</span></div>
+  <div class="header-stats"><span id="headerStats"></span> <span id="syncStatus" style="margin-left:8px"></span></div>
+  <div class="header-actions">
+    <button class="btn btn-gold" id="reviewBtn" onclick="startReview()">每日回顾</button>
+    <button class="btn btn-primary" id="newEntryBtn" onclick="openNewEntry()">+ 新反思</button>
+    <button class="btn btn-ghost" onclick="openSettings()">设置</button>
+  </div>
+</header>
+
+<main>
+  <div class="board-tabs">
+    <div class="board-tab active" data-board="reflection" id="tabReflection" onclick="switchBoard('reflection')">🃏 反思卡片</div>
+    <div class="board-tab" data-board="rules" id="tabRules" onclick="switchBoard('rules')">⚡ 行为规则</div>
+    <div class="board-tab" data-board="principle" id="tabPrinciple" onclick="switchBoard('principle')">💡 思想原则</div>
+  </div>
+
+  <div id="viewLibrary">
+    <div class="toolbar">
+      <input class="search-input" id="searchInput" placeholder="搜索标题 / 事件 / 规则…" oninput="renderLibrary()">
+      <div class="tag-filter" id="tagFilter"></div>
+    </div>
+    <div class="grid" id="cardGrid"></div>
+  </div>
+
+  <div id="viewReview" style="display:none">
+    <div class="review-wrap">
+      <div class="review-progress" id="reviewProgress"></div>
+      <div id="reviewCardSlot"></div>
+      <div class="review-actions">
+        <button class="btn" id="reviewToggleBtn" onclick="toggleCurrentReviewed()">✓ 今日已回顾</button>
+        <button class="btn btn-primary" onclick="nextReviewCard()">下一张 →</button>
+        <button class="btn btn-ghost" onclick="exitReview()">结束回顾</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="viewRules" style="display:none">
+    <div class="toolbar">
+      <input class="search-input" id="searchRuleInput" placeholder="搜索规则 / 场景…" oninput="renderRules()">
+      <div class="tag-filter" id="ruleTagFilter"></div>
+    </div>
+    <div class="preset-bar" id="presetBar"></div>
+    <div class="grid" id="ruleGrid"></div>
+  </div>
+
+  <div id="viewPrinciples" style="display:none">
+    <div class="toolbar">
+      <input class="search-input" id="searchPrincipleInput" placeholder="搜索思想 / 来源…" oninput="renderPrinciples()">
+      <div class="tag-filter" id="principleTagFilter"></div>
+    </div>
+    <div class="grid" id="principleGrid"></div>
+  </div>
+</main>
+
+<!-- 详情弹窗 -->
+<div class="modal-mask" id="detailModal">
+  <div class="modal" id="detailModalBody"></div>
+</div>
+
+<!-- 新建反思弹窗 -->
+<div class="modal-mask" id="newModal">
+  <div class="modal">
+    <h2>说出事情经过</h2>
+    <div class="modal-date">把事情的经过、你的情绪、你的想法，像聊天一样说出来。AI 会帮你浓缩成卡片。</div>
+    <textarea class="input-area" id="rawInput" placeholder="例：昨天我给驾校客服发消息催退费，他隔了一小时才回，还说财务不在……我当时特别生气，一直在内心抱怨，内耗了大半天……"></textarea>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('newModal')">取消</button>
+      <button class="btn" onclick="manualCreate()">手动填写</button>
+      <button class="btn btn-primary" id="aiGenBtn" onclick="aiGenerate()">⚡ AI 生成卡片</button>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑/预览弹窗 -->
+<div class="modal-mask" id="editModal">
+  <div class="modal">
+    <h2 id="editModalTitle">编辑卡片</h2>
+    <div class="modal-date">检查并微调，然后存入卡片库。</div>
+    <div class="field-block"><div class="field-label">标题</div><input class="edit-input" id="f_title"></div>
+    <div class="field-block"><div class="field-label">事件（一两句）</div><textarea class="edit-input" id="f_event"></textarea></div>
+    <div class="field-block"><div class="field-label">情绪触发点</div><textarea class="edit-input" id="f_trigger"></textarea></div>
+    <div class="field-block"><div class="field-label">事实（去情绪化）</div><textarea class="edit-input" id="f_fact"></textarea></div>
+    <div class="field-block"><div class="field-label">⚡ 一句话规则（下次具体怎么做）</div><textarea class="edit-input" id="f_rule"></textarea></div>
+    <div class="field-block"><div class="field-label">我以为的问题</div><textarea class="edit-input" id="f_assumed"></textarea></div>
+    <div class="field-block"><div class="field-label">实际的问题</div><textarea class="edit-input" id="f_actual"></textarea></div>
+    <div class="field-block"><div class="field-label">标签（逗号分隔，如：情绪,金钱）</div><input class="edit-input" id="f_tags"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('editModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveCard()">存入卡片库</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新建规则弹窗 -->
+<div class="modal-mask" id="newRuleModal">
+  <div class="modal">
+    <h2>说出那件重复纠结的事</h2>
+    <div class="modal-date">描述一件你每天/经常要临场做决定的事。AI 会帮你固化成一条行为规则。</div>
+    <textarea class="input-area" id="rawRuleInput" placeholder="例：每天早上站在衣柜前想半天穿什么，试了两三套才出门，浪费时间还影响心情……"></textarea>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('newRuleModal')">取消</button>
+      <button class="btn" onclick="manualCreateRule()">手动填写</button>
+      <button class="btn btn-primary" id="aiRuleGenBtn" onclick="aiGenerateRule()">⚡ AI 生成规则</button>
+    </div>
+  </div>
+</div>
+
+<!-- 规则详情弹窗 -->
+<div class="modal-mask" id="ruleDetailModal">
+  <div class="modal" id="ruleDetailModalBody"></div>
+</div>
+
+<!-- 编辑规则弹窗 -->
+<div class="modal-mask" id="ruleEditModal">
+  <div class="modal">
+    <h2 id="ruleEditModalTitle">编辑规则</h2>
+    <div class="modal-date">规则 = 固定场景 × 固定动作。写下后就不再临场权衡。</div>
+    <div class="field-block"><div class="field-label">规则名</div><input class="edit-input" id="r_title"></div>
+    <div class="field-block"><div class="field-label">⏰ 触发场景（什么时候执行）</div><input class="edit-input" id="r_scene"></div>
+    <div class="field-block"><div class="field-label">📌 固定动作（具体怎么做）</div><textarea class="edit-input" id="r_rule"></textarea></div>
+    <div class="field-block"><div class="field-label">为什么固化（省下什么认知成本，可空）</div><textarea class="edit-input" id="r_why"></textarea></div>
+    <div class="field-block"><div class="field-label">标签（逗号分隔，如：穿搭,饮食,健身）</div><input class="edit-input" id="r_tags"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('ruleEditModal')">取消</button>
+      <button class="btn btn-primary" onclick="saveRuleCard()">存入规则库</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新建思想弹窗 -->
+<div class="modal-mask" id="newPrincipleModal">
+  <div class="modal">
+    <h2>说出那段经历或感悟</h2>
+    <div class="modal-date">描述一段让你坚信某个道理的经历。AI 会帮你提炼成一条思想原则。</div>
+    <textarea class="input-area" id="rawPrincipleInput" placeholder="例：我升本备考时明确了各科目难度，明确只要花时间就能尽可能多地掌握，这种确定性让我持续行动最终上岸……"></textarea>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('newPrincipleModal')">取消</button>
+      <button class="btn" onclick="manualCreatePrinciple()">手动填写</button>
+      <button class="btn btn-primary" id="aiPrincipleGenBtn" onclick="aiGeneratePrinciple()">⚡ AI 提炼思想</button>
+    </div>
+  </div>
+</div>
+
+<!-- 思想详情弹窗 -->
+<div class="modal-mask" id="principleDetailModal">
+  <div class="modal" id="principleDetailModalBody"></div>
+</div>
+
+<!-- 编辑思想弹窗 -->
+<div class="modal-mask" id="principleEditModal">
+  <div class="modal">
+    <h2 id="principleEditModalTitle">编辑思想</h2>
+    <div class="modal-date">思想 = 经过验证的底层认知。它是规则的源头，规则是思想的执行。</div>
+    <div class="field-block"><div class="field-label">思想名称</div><input class="edit-input" id="p_title"></div>
+    <div class="field-block"><div class="field-label">💡 一句话精髓（能当座右铭的浓缩表达）</div><textarea class="edit-input" id="p_essence"></textarea></div>
+    <div class="field-block"><div class="field-label">展开用法（几步操作/要点，每步一行）</div><textarea class="edit-input" id="p_detail"></textarea></div>
+    <div class="field-block"><div class="field-label">来源（哪段经历验证了它，可空）</div><textarea class="edit-input" id="p_source"></textarea></div>
+    <div class="field-block"><div class="field-label">标签（逗号分隔，如：思维模型,决策,学习）</div><input class="edit-input" id="p_tags"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('principleEditModal')">取消</button>
+      <button class="btn btn-primary" onclick="savePrincipleCard()">存入思想库</button>
+    </div>
+  </div>
+</div>
+
+<!-- 设置弹窗 -->
+<div class="modal-mask" id="settingsModal">
+  <div class="modal">
+    <h2>设置</h2>
+    <div class="modal-date">AI 接口配置（OpenAI 兼容格式，支持 DeepSeek / 通义 / Kimi 等）；下方还可配「云同步访问口令」。都不配置也能手动建卡、纯本地使用。</div>
+    <div class="settings-row">
+      <label>API 地址</label>
+      <input class="edit-input" id="s_apiBase" placeholder="https://api.deepseek.com/v1">
+    </div>
+    <div class="settings-row">
+      <label>API Key</label>
+      <input class="edit-input" id="s_apiKey" type="password" placeholder="sk-...">
+    </div>
+    <div class="settings-row">
+      <label>模型</label>
+      <input class="edit-input" id="s_model" placeholder="deepseek-chat">
+      <div class="hint">Key 只存在你自己设备的浏览器里，不会上传到任何服务器。</div>
+    </div>
+    <div class="settings-row">
+      <label>云同步 API 地址（可选）</label>
+      <input class="edit-input" id="s_syncBase" placeholder="留空 = 本站 /api/cards，例如 https://reflection-cards.vercel.app">
+    </div>
+    <div class="settings-row">
+      <label>访问口令（填你在 Vercel 环境变量里设的 APP_TOKEN）</label>
+      <input class="edit-input" id="s_token" type="password" placeholder="与 Vercel 环境变量 APP_TOKEN 一致">
+      <div class="hint">数据只存你自己的 Turso 库：每次读写都带这个口令，口令不对服务端直接拒绝(401)，所以只有你能看到自己的数据。口令只存在你自己设备的浏览器里，不会进代码或上传。部署在 Vercel 时 API 地址留空即可；从旧 GitHub Pages 地址打开则填你的 Vercel 地址。</div>
+    </div>
+    <div class="settings-row">
+      <label>数据</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="exportData()">导出 JSON</button>
+        <button class="btn" onclick="document.getElementById('importFile').click()">导入 JSON</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('settingsModal')">关闭</button>
+      <button class="btn btn-primary" onclick="saveSettings()">保存设置</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= 数据层 ================= */
+const LS_CARDS = "rc_cards_v1";
+const LS_SETTINGS = "rc_settings_v1";
+
+function loadCards() {
+  try { return JSON.parse(localStorage.getItem(LS_CARDS)) || []; } catch { return []; }
+}
+function saveCards(cards) { localStorage.setItem(LS_CARDS, JSON.stringify(cards)); }
+function loadSettings() {
+  try { return JSON.parse(localStorage.getItem(LS_SETTINGS)) || {}; } catch { return {}; }
+}
+function persistSettings(s) { localStorage.setItem(LS_SETTINGS, JSON.stringify(s)); }
+
+let cards = loadCards();
+let editingId = null;
+let activeTag = null;
+let activeBoard = "reflection";   // 当前板块：reflection 反思卡 / rules 行为规则
+let activeRuleTag = null;
+let ruleEditingId = null;
+let activePrincipleTag = null;
+let principleEditingId = null;
+
+function fmtDate(d) {
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+/* 连续执行天数：今天没打卡就从昨天往前数 */
+function streakOf(c) {
+  const set = new Set(c.reviews || []);
+  const d = new Date();
+  if (!set.has(fmtDate(d))) d.setDate(d.getDate() - 1);
+  let n = 0;
+  while (set.has(fmtDate(d))) { n++; d.setDate(d.getDate() - 1); }
+  return n;
+}
+
+/* 回顾次数 = 历史基数(旧数据) + 有日期记录的次数 */
+function countOf(c) { return (c.baseCount || 0) + (c.reviews || []).length; }
+function reviewedToday(c) { return (c.reviews || []).includes(today()); }
+/* 记忆等级：由回顾次数自动算出，不靠主观判断 */
+function levelOf(c) {
+  const n = countOf(c);
+  if (n >= 7) return { lv: 3, name: "已内化" };
+  if (n >= 3) return { lv: 2, name: "熟悉" };
+  if (n >= 1) return { lv: 1, name: "回顾中" };
+  return { lv: 0, name: "新卡" };
+}
+/* 旧数据迁移：mastered/reviewCount → baseCount + reviews 日期数组 */
+cards.forEach(c => {
+  if (c.mastered !== undefined) { c.reviewCount = c.mastered ? 7 : 0; delete c.mastered; }
+  if (c.reviewCount !== undefined) { c.baseCount = c.reviewCount; delete c.reviewCount; }
+  if (!Array.isArray(c.reviews)) c.reviews = [];
+  if (!c.kind) c.kind = "reflection";
+  delete c.lastReviewed;
+  if (!c.updated) c.updated = c.created || Date.now();
+});
+
+/* 预置思想：首次打开自动补入（只补一次，删除后不会再加） */
+const DEFAULT_PRINCIPLES = [
+  { title: "确定性思维",
+    essence: "把不可控的结果，翻译成可控的变量，然后只做变量。",
+    detail: "① 拆变量：找出决定结果的少数硬变量（升本=知识点掌握量；健身=渐进重量×蛋白质×热量缺口×时间）\n② 信因果：变量与结果是必然因果，不靠运气——花的时间=多掌握的量\n③ 只执行：注意力从「结果会不会来」全部转移到「今天变量做了没有」，焦虑消失，行动因此可持续\n④ 拿结果：结果是变量堆够之后的副产品，不用追，它自己来\n\n前提：变量必须选对。选错变量，确定性就是幻觉——所以第①步值得花最多时间。",
+    source: "升本备考验证：明确各科目难度，明确「只要花时间就能尽可能多地掌握」，正是这份确定性让行动持续不内耗，最终上岸。",
+    tags: ["思维模型"] },
+];
+if (!localStorage.getItem("rc_seeds_v1")) {
+  DEFAULT_PRINCIPLES.forEach((p, i) => {
+    if (!cards.some(c => c.kind === "principle" && c.title === p.title)) {
+      cards.push({ id: "seed_p" + i, kind: "principle", date: today(), created: Date.now(), updated: Date.now(), baseCount: 0, reviews: [], ...p });
+    }
+  });
+  localStorage.setItem("rc_seeds_v1", "1");
+}
+saveCards(cards);
+
+/* ================= 云同步（Vercel + Turso） ================= */
+/* 数据存在你自己的 Turso 库，由 Vercel 的 /api/cards 读写。
+   每次请求都带「访问口令」，与 Vercel 环境变量 APP_TOKEN 一致才放行(否则 401)。
+   默认走旧站 reflection-cards.vercel.app 的接口（历史数据都在那边，无需迁移）；
+   数据迁移到本站 Turso 库后，把设置页「同步地址」清空即可改为同源 /api/cards。 */
+function apiConfigured() { const s = loadSettings(); return !!s.token; }
+function apiUrl(path) {
+  const s = loadSettings();
+  const base = (s.syncBase || "").trim().replace(/\/+$/, "") || "https://reflection-cards.vercel.app";
+  return base + "/api/cards" + path;
+}
+function apiHeaders() {
+  return { "Content-Type": "application/json", "X-Access-Token": loadSettings().token };
+}
+function setSyncStatus(txt, color) {
+  const el = document.getElementById("syncStatus");
+  el.textContent = txt;
+  el.style.color = color || "var(--text-faint)";
+}
+function cardToRow(c) {
+  const { id, ...rest } = c;
+  return { id: c.id, data: rest, updated: c.updated || 0 };
+}
+async function apiFetchAll() {
+  const res = await fetch(apiUrl(""), { headers: apiHeaders() });
+  if (res.status === 401) throw new Error("口令不对（服务端拒绝访问）");
+  if (!res.ok) throw new Error("云端读取失败 " + res.status);
+  return res.json();
+}
+async function apiUpsert(list) {
+  if (!list.length) return;
+  const res = await fetch(apiUrl(""), { method: "POST", headers: apiHeaders(), body: JSON.stringify(list.map(cardToRow)) });
+  if (res.status === 401) throw new Error("口令不对（服务端拒绝访问）");
+  if (!res.ok) throw new Error("云端写入失败 " + res.status);
+}
+async function apiDeleteIds(ids) {
+  if (!ids.length) return;
+  const res = await fetch(apiUrl(""), { method: "DELETE", headers: apiHeaders(), body: JSON.stringify({ ids }) });
+  if (res.status === 401) throw new Error("口令不对（服务端拒绝访问）");
+  if (!res.ok) throw new Error("云端删除失败 " + res.status);
+}
+
+/* 启动时：云端 ↔ 本地 双向合并（updated 时间戳新者胜） */
+async function initSync() {
+  if (!apiConfigured()) { setSyncStatus("🔒 未配置访问口令，仅本地"); return; }
+  setSyncStatus("☁️ 同步中…");
+  try {
+    const rows = await apiFetchAll();
+    const cloudMap = new Map(rows.map(r => [r.id, r]));
+    // 云端 → 本地（另一台设备新增/更新的卡）
+    rows.forEach(r => {
+      const local = cards.find(c => c.id === r.id);
+      const cloudCard = { id: r.id, ...r.data };
+      if (!local) cards.push(cloudCard);
+      else if ((r.updated || 0) > (local.updated || 0)) Object.assign(local, cloudCard);
+    });
+    // 本地 → 云端（本机新增/更新的卡）
+    const toPush = cards.filter(c => !cloudMap.has(c.id) || (c.updated || 0) > (cloudMap.get(c.id).updated || 0));
+    await apiUpsert(toPush);
+    saveCards(cards);
+    renderLibrary();
+    setSyncStatus("☁️ 已同步", "var(--green)");
+  } catch (e) {
+    setSyncStatus("☁️ 同步失败，先用本地数据", "var(--red)");
+  }
+}
+
+/* 变更后：防抖全量推送（含云端多余数据清理） */
+let syncTimer = null;
+function scheduleSyncPush() {
+  if (!apiConfigured()) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncPushAll, 800);
+}
+async function syncPushAll() {
+  setSyncStatus("☁️ 同步中…");
+  try {
+    await apiUpsert(cards);
+    const rows = await apiFetchAll();
+    const localIds = new Set(cards.map(c => c.id));
+    await apiDeleteIds(rows.filter(r => !localIds.has(r.id)).map(r => r.id));
+    setSyncStatus("☁️ 已同步", "var(--green)");
+  } catch (e) {
+    setSyncStatus("☁️ 同步失败，下次操作重试", "var(--red)");
+  }
+}
+/* ================= 工具 ================= */
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2200);
+}
+function esc(s) {
+  return String(s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+function today() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function openModal(id) { document.getElementById(id).classList.add("open"); }
+function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+document.querySelectorAll(".modal-mask").forEach(m => {
+  m.addEventListener("click", e => { if (e.target === m) m.classList.remove("open"); });
+});
+
+/* ================= 卡片库视图 ================= */
+function renderLibrary() {
+  const q = document.getElementById("searchInput").value.trim().toLowerCase();
+  const grid = document.getElementById("cardGrid");
+
+  // 标签过滤栏（只取反思卡的标签）
+  const allTags = [...new Set(cards.filter(c => c.kind === "reflection").flatMap(c => c.tags || []))];
+  document.getElementById("tagFilter").innerHTML = allTags.map(t =>
+    `<button class="tag-chip ${activeTag===t?"active":""}" onclick="toggleTag('${esc(t)}')">${esc(t)}</button>`
+  ).join("");
+
+  let list = cards.filter(c => c.kind === "reflection")
+    .sort((a,b) => b.date.localeCompare(a.date) || b.created - a.created);
+  if (activeTag) list = list.filter(c => (c.tags||[]).includes(activeTag));
+  if (q) list = list.filter(c => [c.title,c.event,c.rule,c.trigger,c.fact].join(" ").toLowerCase().includes(q));
+
+  const nRef = cards.filter(c => c.kind === "reflection").length;
+  const nRule = cards.filter(c => c.kind === "rule").length;
+  document.getElementById("headerStats").textContent =
+    cards.length ? `${nRef} 张反思 · ${nRule} 条规则` : "";
+
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <div class="big">🃏</div>
+      ${nRef
+        ? `<div>没有匹配的卡片</div>`
+        : `<div>还没有卡片。点右上角「+ 新反思」，把事情的经过说出来，AI 会帮你浓缩成一张反思卡片。</div>`}
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(c => {
+    const L = levelOf(c);
+    return `
+    <div class="rcard" onclick="openDetail('${c.id}')">
+      <div class="rcard-top">
+        <div class="rcard-title">${esc(c.title)}</div>
+        <div class="rcard-date">${esc(c.date)}</div>
+      </div>
+      <div class="rcard-rule">${esc(c.rule)}</div>
+      <div class="rcard-event">${esc(c.event)}</div>
+      <div class="rcard-tags">
+        ${(c.tags||[]).map(t => `<span class="mini-tag">${esc(t)}</span>`).join("")}
+        <span class="count-chip lv${L.lv}" style="margin-left:auto">${reviewedToday(c) ? "✓ 今日已回顾 · " : ""}🔁 ${countOf(c)} 次 · ${L.name}</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+function toggleTag(t) {
+  activeTag = activeTag === t ? null : t;
+  renderLibrary();
+}
+
+/* ================= 详情 ================= */
+function openDetail(id) {
+  const c = cards.find(x => x.id === id);
+  if (!c) return;
+  const L = levelOf(c);
+  document.getElementById("detailModalBody").innerHTML = `
+    <h2>${esc(c.title)}</h2>
+    <div class="modal-date">${esc(c.date)} · <span class="count-chip lv${L.lv}">${reviewedToday(c) ? "✓ 今日已回顾 · " : ""}🔁 已回顾 ${countOf(c)} 次 · ${L.name}</span></div>
+    <div class="field-block">
+      <div class="field-label"><span class="dot" style="background:var(--accent)"></span>事件</div>
+      <div class="field-value">${esc(c.event)}</div>
+    </div>
+    <div class="field-block">
+      <div class="field-label"><span class="dot" style="background:var(--gold)"></span>情绪触发点</div>
+      <div class="field-value">${esc(c.trigger)}</div>
+    </div>
+    <div class="field-block">
+      <div class="field-label"><span class="dot" style="background:var(--text-dim)"></span>事实</div>
+      <div class="field-value">${esc(c.fact)}</div>
+    </div>
+    <div class="field-block">
+      <div class="field-label"><span class="dot" style="background:var(--accent)"></span>一句话规则</div>
+      <div class="field-value rule-box">⚡ ${esc(c.rule)}</div>
+    </div>
+    <div class="field-block">
+      <div class="field-label"><span class="dot" style="background:var(--red)"></span>认知纠偏</div>
+      <div class="qa-pair">
+        <div class="qa-box assumed"><div class="qa-head">我以为的问题</div>${esc(c.assumed)}</div>
+        <div class="qa-box actual"><div class="qa-head">实际的问题</div>${esc(c.actual)}</div>
+      </div>
+    </div>
+    <div class="field-block">
+      <div class="field-label"><span class="dot" style="background:var(--green)"></span>回顾记录</div>
+      <div class="field-value" style="font-size:.84rem;color:var(--text-dim)">
+        ${(c.reviews||[]).length
+          ? c.reviews.map((d,i) => `<div>第 ${(c.baseCount||0)+i+1} 次 · ${esc(d)}${d===today()?"（今天）":""}</div>`).join("")
+          : "还没有带日期的回顾记录"}
+        ${(c.baseCount||0) > 0 ? `<div style="color:var(--text-faint)">另有早期回顾 ${c.baseCount} 次（无日期记录）</div>` : ""}
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="deleteCard('${c.id}')">删除</button>
+      <button class="btn" onclick="editCard('${c.id}')">编辑</button>
+      <button class="btn ${reviewedToday(c) ? "" : "btn-primary"}" onclick="toggleReviewToday('${c.id}', true)">
+        ${reviewedToday(c) ? "↩ 取消今日回顾" : "✓ 今日已回顾"}
+      </button>
+    </div>
+  `;
+  openModal("detailModal");
+}
+function deleteCard(id) {
+  if (!confirm("确定删除这张卡片？")) return;
+  cards = cards.filter(c => c.id !== id);
+  saveCards(cards);
+  scheduleSyncPush();
+  closeModal("detailModal");
+  renderLibrary();
+  toast("已删除");
+}
+/* 今日回顾开关：点一次记今日已回顾，再点一次取消；每天最多计一次 */
+function toggleReviewToday(id, fromDetail) {
+  const c = cards.find(x => x.id === id);
+  if (!c) return;
+  if (!Array.isArray(c.reviews)) c.reviews = [];
+  const t = today();
+  const idx = c.reviews.indexOf(t);
+  if (idx >= 0) {
+    c.reviews.splice(idx, 1);
+    toast("已取消今日回顾");
+  } else {
+    c.reviews.push(t);
+    const L = levelOf(c);
+    toast(`今日已回顾 ✓ 累计 ${countOf(c)} 次 · ${L.name}`);
+  }
+  c.updated = Date.now();
+  saveCards(cards);
+  scheduleSyncPush();
+  if (fromDetail) openDetail(id); // 刷新详情显示
+  renderLibrary();
+}
+
+/* ================= 新建 / AI 生成 ================= */
+function openNew() {
+  document.getElementById("rawInput").value = "";
+  openModal("newModal");
+}
+function manualCreate() {
+  closeModal("newModal");
+  editingId = null;
+  fillEditForm({ title:"", event:"", trigger:"", fact:"", rule:"", assumed:"", actual:"", tags:[] });
+  document.getElementById("editModalTitle").textContent = "手动建卡";
+  openModal("editModal");
+}
+
+const AI_PROMPT = `你是一个个人反思提炼助手。用户会用口语描述一件事和自己的反思。请把内容浓缩成一张"反思卡片"，严格输出 JSON（不要 markdown 代码块，不要多余文字），字段如下：
+{
+  "title": "标题，一行说清什么事，不超过15字",
+  "event": "事件：一两句客观描述发生了什么",
+  "trigger": "情绪触发点：一句话，指出是什么具体落差/场景点燃了情绪",
+  "fact": "事实：一句去情绪化、站在旁观者角度的客观判断",
+  "rule": "一句话规则：下次遇到同类情况具体怎么做，必须是可执行的动作（例如'催一次→设3天后提醒→忘掉'），禁止写'保持好心态'这类空话",
+  "assumed": "我以为的问题：用户表面上以为的问题是什么",
+  "actual": "实际的问题：更深一层的真实问题是什么",
+  "tags": ["1-3个分类标签，从 情绪/金钱/人际/习惯/决策/健康/工作/学习 中选"]
+}
+要求：简洁、直接、不鸡汤、每条尽量一句话。`;
+
+async function aiGenerate() {
+  const raw = document.getElementById("rawInput").value.trim();
+  if (!raw) { toast("先说出事情经过"); return; }
+  const s = loadSettings();
+  if (!s.apiBase || !s.apiKey || !s.model) {
+    toast("请先在「设置」里配置 AI 接口，或改用「手动填写」");
+    return;
+  }
+  const btn = document.getElementById("aiGenBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-dots">AI 提炼中</span>';
+  try {
+    const res = await fetch(s.apiBase.replace(/\/+$/,"") + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + s.apiKey },
+      body: JSON.stringify({
+        model: s.model,
+        messages: [
+          { role: "system", content: AI_PROMPT },
+          { role: "user", content: raw }
+        ],
+        temperature: 0.4
+      })
+    });
+    if (!res.ok) throw new Error("API 返回 " + res.status);
+    const data = await res.json();
+    let text = data.choices[0].message.content.trim();
+    text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    const parsed = JSON.parse(text);
+    closeModal("newModal");
+    editingId = null;
+    fillEditForm(parsed);
+    document.getElementById("editModalTitle").textContent = "AI 生成的卡片（可微调）";
+    openModal("editModal");
+  } catch (err) {
+    toast("AI 生成失败：" + err.message + "，可改用手动填写");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "⚡ AI 生成卡片";
+  }
+}
+
+function fillEditForm(c) {
+  document.getElementById("f_title").value = c.title || "";
+  document.getElementById("f_event").value = c.event || "";
+  document.getElementById("f_trigger").value = c.trigger || "";
+  document.getElementById("f_fact").value = c.fact || "";
+  document.getElementById("f_rule").value = c.rule || "";
+  document.getElementById("f_assumed").value = c.assumed || "";
+  document.getElementById("f_actual").value = c.actual || "";
+  document.getElementById("f_tags").value = (c.tags || []).join(",");
+}
+function editCard(id) {
+  const c = cards.find(x => x.id === id);
+  if (!c) return;
+  editingId = id;
+  fillEditForm(c);
+  closeModal("detailModal");
+  document.getElementById("editModalTitle").textContent = "编辑卡片";
+  openModal("editModal");
+}
+function saveCard() {
+  const data = {
+    title: document.getElementById("f_title").value.trim(),
+    event: document.getElementById("f_event").value.trim(),
+    trigger: document.getElementById("f_trigger").value.trim(),
+    fact: document.getElementById("f_fact").value.trim(),
+    rule: document.getElementById("f_rule").value.trim(),
+    assumed: document.getElementById("f_assumed").value.trim(),
+    actual: document.getElementById("f_actual").value.trim(),
+    tags: document.getElementById("f_tags").value.split(/[,，]/).map(t => t.trim()).filter(Boolean)
+  };
+  if (!data.title || !data.rule) { toast("标题和一句话规则必填"); return; }
+  if (editingId) {
+    const c = cards.find(x => x.id === editingId);
+    Object.assign(c, data, { updated: Date.now() });
+    toast("已更新");
+  } else {
+    cards.push({ id: "c" + Date.now().toString(36), date: today(), created: Date.now(), updated: Date.now(), baseCount: 0, reviews: [], ...data });
+    toast("已存入卡片库");
+  }
+  saveCards(cards);
+  scheduleSyncPush();
+  closeModal("editModal");
+  renderLibrary();
+}
+
+/* ================= 板块切换 ================= */
+function switchBoard(board) {
+  activeBoard = board;
+  document.getElementById("tabReflection").classList.toggle("active", board === "reflection");
+  document.getElementById("tabRules").classList.toggle("active", board === "rules");
+  document.getElementById("tabPrinciple").classList.toggle("active", board === "principle");
+  document.getElementById("viewLibrary").style.display = board === "reflection" ? "block" : "none";
+  document.getElementById("viewRules").style.display = board === "rules" ? "block" : "none";
+  document.getElementById("viewPrinciples").style.display = board === "principle" ? "block" : "none";
+  document.getElementById("viewReview").style.display = "none";
+  document.getElementById("reviewBtn").style.display = board === "reflection" ? "" : "none";
+  document.getElementById("newEntryBtn").textContent =
+    board === "reflection" ? "+ 新反思" : board === "rules" ? "+ 新规则" : "+ 新思想";
+  if (board === "rules") renderRules();
+  else if (board === "principle") renderPrinciples();
+  else renderLibrary();
+}
+function openNewEntry() {
+  if (activeBoard === "rules") openNewRule();
+  else if (activeBoard === "principle") openNewPrinciple();
+  else openNew();
+}
+
+/* ================= 行为规则板块 ================= */
+/* 预设规则：把每天重复的决定固化下来，可一键载入后再自己改 */
+const PRESET_RULES = [
+  { title: "穿搭不临场决定", scene: "每天早上出门前",
+    rule: "前一天晚上把第二天穿的衣服选好挂出来；当天直接穿，不再试第二套。",
+    why: "穿搭是低价值决定，固化后早晨的认知资源留给正事。", tags: ["穿搭"] },
+  { title: "衣柜分区固定", scene: "每次收拾、取用衣物时",
+    rule: "T恤、短裤、长裤、外套分门别类固定位置摆放，用完放回原区；只有换季才重新整理。",
+    why: "固定位置 = 零思考取用，找东西不再耗神。", tags: ["穿搭"] },
+  { title: "三餐提前一周定", scene: "每周日晚上",
+    rule: "周日晚上花 20 分钟规划下一周的早/中/晚餐菜单；平时到点照吃，不临场想“吃什么”。",
+    why: "“吃什么”每天要消耗 3 次决策，批量化后归零。", tags: ["饮食"] },
+  { title: "健身照表执行", scene: "每次训练前",
+    rule: "训练课表提前定好（动作、组数、重量渐进）；到点照表练，不临时想练什么。",
+    why: "计划外移，训练时只执行、不决策。", tags: ["健身"] },
+  { title: "消息固定时段回", scene: "每天",
+    rule: "固定 2-3 个时间段统一回消息（如 12:30 / 18:00 / 21:30），其余时间关闭通知。",
+    why: "每次任务切换都要重新加载记忆，批处理省下切换成本。", tags: ["信息"] },
+  { title: "重要决定批量处理", scene: "每天固定时段",
+    rule: "重要决定先记下来攒着，集中到每天一个固定时段批量处理；其他时间不分散权衡。",
+    why: "减少任务切换带来的认知疲劳，把精力留给真正重要的事。", tags: ["决策"] },
+];
+
+function presetLoaded(p) {
+  return cards.some(c => c.kind === "rule" && c.title === p.title);
+}
+function addPreset(idx) {
+  const p = PRESET_RULES[idx];
+  if (presetLoaded(p)) { toast("这条规则已在库中"); return; }
+  cards.push({ id: "c" + Date.now().toString(36) + Math.floor(Math.random()*100), kind: "rule",
+    date: today(), created: Date.now(), updated: Date.now(), reviews: [], ...p });
+  saveCards(cards);
+  scheduleSyncPush();
+  renderRules();
+  renderLibrary();
+  toast("已载入：" + p.title);
+}
+function loadAllPresets() {
+  const fresh = PRESET_RULES.filter(p => !presetLoaded(p));
+  if (!fresh.length) { toast("预设规则已全部载入"); return; }
+  fresh.forEach((p, i) => cards.push({ id: "c" + Date.now().toString(36) + i, kind: "rule",
+    date: today(), created: Date.now(), updated: Date.now(), reviews: [], ...p }));
+  saveCards(cards);
+  scheduleSyncPush();
+  renderRules();
+  renderLibrary();
+  toast("已一键载入 " + fresh.length + " 条预设规则");
+}
+
+function renderRules() {
+  const q = (document.getElementById("searchRuleInput").value || "").trim().toLowerCase();
+  const grid = document.getElementById("ruleGrid");
+  const rules = cards.filter(c => c.kind === "rule");
+
+  // 标签过滤栏
+  const allTags = [...new Set(rules.flatMap(c => c.tags || []))];
+  document.getElementById("ruleTagFilter").innerHTML = allTags.map(t =>
+    `<button class="tag-chip ${activeRuleTag===t?"active":""}" onclick="toggleRuleTag('${esc(t)}')">${esc(t)}</button>`
+  ).join("");
+
+  // 预设载入栏：只显示还没载入的预设
+  const unloaded = PRESET_RULES.map((p, i) => ({ p, i })).filter(x => !presetLoaded(x.p));
+  document.getElementById("presetBar").innerHTML = unloaded.length
+    ? `<span class="preset-label">快捷载入：</span>` +
+      unloaded.map(x => `<button class="preset-chip" onclick="addPreset(${x.i})">＋ ${esc(x.p.title)}</button>`).join("") +
+      `<button class="preset-chip" style="border-style:solid" onclick="loadAllPresets()">⚡ 全部载入</button>`
+    : "";
+
+  let list = [...rules].sort((a,b) => b.created - a.created);
+  if (activeRuleTag) list = list.filter(c => (c.tags||[]).includes(activeRuleTag));
+  if (q) list = list.filter(c => [c.title,c.scene,c.rule,c.why].join(" ").toLowerCase().includes(q));
+
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <div class="big">⚡</div>
+      ${rules.length
+        ? `<div>没有匹配的规则</div>`
+        : `<div>还没有行为规则。点上方预设一键载入，或点右上角「+ 新规则」把一件重复纠结的事固化下来。</div>`}
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(c => {
+    const streak = streakOf(c);
+    const doneToday = (c.reviews || []).includes(today());
+    return `
+    <div class="rcard rule-card" onclick="openRuleDetail('${c.id}')">
+      <div class="rcard-top">
+        <div class="rcard-title">${esc(c.title)}</div>
+        <div class="rcard-date">${esc(c.date)}</div>
+      </div>
+      <div class="rcard-scene">${esc(c.scene)}</div>
+      <div class="rcard-rule-action">${esc(c.rule)}</div>
+      <div class="rcard-tags">
+        ${(c.tags||[]).map(t => `<span class="mini-tag">${esc(t)}</span>`).join("")}
+        <span class="streak-chip" style="margin-left:auto">🔥 连续 ${streak} 天 · 累计 ${(c.reviews||[]).length} 次</span>
+      </div>
+      <button class="check-btn ${doneToday ? "done" : ""}" onclick="event.stopPropagation();toggleRuleCheck('${c.id}')">
+        ${doneToday ? "✓ 今日已执行" : "今日执行打卡"}
+      </button>
+    </div>`;
+  }).join("");
+}
+function toggleRuleTag(t) {
+  activeRuleTag = activeRuleTag === t ? null : t;
+  renderRules();
+}
+/* 今日执行打卡：点一次记今日已执行，再点取消；每天最多计一次 */
+function toggleRuleCheck(id, fromDetail) {
+  const c = cards.find(x => x.id === id);
+  if (!c) return;
+  if (!Array.isArray(c.reviews)) c.reviews = [];
+  const t = today();
+  const idx = c.reviews.indexOf(t);
+  if (idx >= 0) {
+    c.reviews.splice(idx, 1);
+    toast("已取消今日打卡");
+  } else {
+    c.reviews.push(t);
+    toast(`今日已执行 ✓ 连续 ${streakOf(c)} 天`);
+  }
+  c.updated = Date.now();
+  saveCards(cards);
+  scheduleSyncPush();
+  if (fromDetail) openRuleDetail(id);
+  renderRules();
+}
+
+function openRuleDetail(id) {
+  const c = cards.find(x => x.id === id);
+  if (!c) return;
+  const doneToday = (c.reviews || []).includes(today());
+  document.getElementById("ruleDetailModalBody").innerHTML = `
+    <h2>${esc(c.title)}</h2>
+    <div class="modal-date">${esc(c.date)} · <span class="streak-chip">🔥 连续 ${streakOf(c)} 天 · 累计执行 ${(c.reviews||[]).length} 次</span></div>
+    <div class="field-block">
+      <div class="field-label"><span class="dot" style="background:var(--gold)"></span>触发场景</div>
+      <div class="field-value">⏰ ${esc(c.scene)}</div>
+    </div>
+    <div class="field-block">
+      <div class="field-label"><span class="dot" style="background:var(--green)"></span>固定动作</div>
+      <div class="field-value action-box">📌 ${esc(c.rule)}</div>
+    </div>
+    ${c.why ? `
+    <div class="field-block">
+      <div class="field-label"><span class="dot" style="background:var(--text-dim)"></span>为什么固化</div>
+      <div class="field-value">${esc(c.why)}</div>
+    </div>` : ""}
+    <div class="field-block">
+      <div class="field-label"><span class="dot" style="background:var(--green)"></span>执行记录</div>
+      <div class="field-value" style="font-size:.84rem;color:var(--text-dim)">
+        ${(c.reviews||[]).length
+          ? [...c.reviews].sort().reverse().slice(0, 10).map(d => `<div>${esc(d)}${d===today()?"（今天）":""}</div>`).join("") + ((c.reviews||[]).length > 10 ? `<div style="color:var(--text-faint)">…共 ${c.reviews.length} 天</div>` : "")
+          : "还没有执行记录"}
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="deleteRule('${c.id}')">删除</button>
+      <button class="btn" onclick="editRule('${c.id}')">编辑</button>
+      <button class="btn ${doneToday ? "" : "btn-primary"}" onclick="toggleRuleCheck('${c.id}', true)">
+        ${doneToday ? "↩ 取消今日打卡" : "✓ 今日执行打卡"}
+      </button>
+    </div>
+  `;
+  openModal("ruleDetailModal");
+}
+function deleteRule(id) {
+  if (!confirm("确定删除这条规则？")) return;
+  cards = cards.filter(c => c.id !== id);
+  saveCards(cards);
+  scheduleSyncPush();
+  closeModal("ruleDetailModal");
+  renderRules();
+  renderLibrary();
+  toast("已删除");
+}
+
+/* ================= 新建 / AI 生成规则 ================= */
+function openNewRule() {
+  document.getElementById("rawRuleInput").value = "";
+  openModal("newRuleModal");
+}
+function manualCreateRule() {
+  closeModal("newRuleModal");
+  ruleEditingId = null;
+  fillRuleForm({ title:"", scene:"", rule:"", why:"", tags:[] });
+  document.getElementById("ruleEditModalTitle").textContent = "手动建规则";
+  openModal("ruleEditModal");
+}
+
+const AI_RULE_PROMPT = `你是一个"决策规则化"助手。用户会描述一件每天/经常要临场做决定、反复纠结的事。请把它固化成一条行为规则，严格输出 JSON（不要 markdown 代码块，不要多余文字），字段如下：
+{
+  "title": "规则名，不超过12字，动词开头优先",
+  "scene": "触发场景：什么时候/什么情境下执行这条规则，一句话",
+  "rule": "固定动作：具体可执行的做法，禁止写'尽量'、'注意'这类模糊词，要像说明书一样明确",
+  "why": "为什么固化：一句话说清省下了什么认知成本（决策疲劳/任务切换/内耗）",
+  "tags": ["1-2个分类标签，从 穿搭/饮食/健身/作息/信息/决策/学习/工作/其他 中选"]
+}
+要求：简洁、直接、可执行、不鸡汤。`;
+
+async function aiGenerateRule() {
+  const raw = document.getElementById("rawRuleInput").value.trim();
+  if (!raw) { toast("先描述那件重复纠结的事"); return; }
+  const s = loadSettings();
+  if (!s.apiBase || !s.apiKey || !s.model) {
+    toast("请先在「设置」里配置 AI 接口，或改用「手动填写」");
+    return;
+  }
+  const btn = document.getElementById("aiRuleGenBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-dots">AI 提炼中</span>';
+  try {
+    const res = await fetch(s.apiBase.replace(/\/+$/,"") + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + s.apiKey },
+      body: JSON.stringify({
+        model: s.model,
+        messages: [
+          { role: "system", content: AI_RULE_PROMPT },
+          { role: "user", content: raw }
+        ],
+        temperature: 0.4
+      })
+    });
+    if (!res.ok) throw new Error("API 返回 " + res.status);
+    const data = await res.json();
+    let text = data.choices[0].message.content.trim();
+    text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    const parsed = JSON.parse(text);
+    closeModal("newRuleModal");
+    ruleEditingId = null;
+    fillRuleForm(parsed);
+    document.getElementById("ruleEditModalTitle").textContent = "AI 生成的规则（可微调）";
+    openModal("ruleEditModal");
+  } catch (err) {
+    toast("AI 生成失败：" + err.message + "，可改用手动填写");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "⚡ AI 生成规则";
+  }
+}
+
+function fillRuleForm(c) {
+  document.getElementById("r_title").value = c.title || "";
+  document.getElementById("r_scene").value = c.scene || "";
+  document.getElementById("r_rule").value = c.rule || "";
+  document.getElementById("r_why").value = c.why || "";
+  document.getElementById("r_tags").value = (c.tags || []).join(",");
+}
+function editRule(id) {
+  const c = cards.find(x => x.id === id);
+  if (!c) return;
+  ruleEditingId = id;
+  fillRuleForm(c);
+  closeModal("ruleDetailModal");
+  document.getElementById("ruleEditModalTitle").textContent = "编辑规则";
+  openModal("ruleEditModal");
+}
+function saveRuleCard() {
+  const data = {
+    title: document.getElementById("r_title").value.trim(),
+    scene: document.getElementById("r_scene").value.trim(),
+    rule: document.getElementById("r_rule").value.trim(),
+    why: document.getElementById("r_why").value.trim(),
+    tags: document.getElementById("r_tags").value.split(/[,，]/).map(t => t.trim()).filter(Boolean)
+  };
+  if (!data.title || !data.rule) { toast("规则名和固定动作必填"); return; }
+  if (ruleEditingId) {
+    const c = cards.find(x => x.id === ruleEditingId);
+    Object.assign(c, data, { updated: Date.now() });
+    toast("已更新");
+  } else {
+    cards.push({ id: "c" + Date.now().toString(36), kind: "rule", date: today(), created: Date.now(), updated: Date.now(), reviews: [], ...data });
+    toast("已存入规则库");
+  }
+  saveCards(cards);
+  scheduleSyncPush();
+  closeModal("ruleEditModal");
+  renderRules();
+  renderLibrary();
+}
+
+/* ================= 思想原则板块 ================= */
+/* 思想 = 经过验证的底层认知，是规则的源头；用回顾机制内化，不用打卡 */
+function renderPrinciples() {
+  const q = (document.getElementById("searchPrincipleInput").value || "").trim().toLowerCase();
+  const grid = document.getElementById("principleGrid");
+  const principles = cards.filter(c => c.kind === "principle");
+
+  const allTags = [...new Set(principles.flatMap(c => c.tags || []))];
+  document.getElementById("principleTagFilter").innerHTML = allTags.map(t =>
+    `<button class="tag-chip ${activePrincipleTag===t?"active":""}" onclick="togglePrincipleTag('${esc(t)}')">${esc(t)}</button>`
+  ).join("");
+
+  let list = [...principles].sort((a,b) => b.created - a.created);
+  if (activePrincipleTag) list = list.filter(c => (c.tags||[]).includes(activePrincipleTag));
+  if (q) list = list.filter(c => [c.title,c.essence,c.detail,c.source].join(" ").toLowerCase().includes(q));
+
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <div class="big">💡</div>
+      ${principles.length
+        ? `<div>没有匹配的思想</div>`
+        : `<div>还没有思想原则。点右上角「+ 新思想」，把一段让你坚信某个道理的经历提炼成底层认知。</div>`}
+    </div>`;
+    return;
+  }
+
+  grid.innerHTML = list.map(c => {
+    const L = levelOf(c);
+    return `
+    <div class="rcard principle-card" onclick="openPrincipleDetail('${c.id}')">
+      <div class="rcard-top">
+        <div class="rcard-title">${esc(c.title)}</div>
+        <div class="rcard-date">${esc(c.date)}</div>
+      </div>
+      <div class="rcard-essence">${esc(c.essence)}</div>
+      <div class="rcard-event">${esc(c.detail)}</div>
+      <div class="rcard-tags">
+        ${(c.tags||[]).map(t => `<span class="mini-tag">${esc(t)}</span>`).join("")}
+        <span class="count-chip lv${L.lv}" style="margin-left:auto">${reviewedToday(c) ? "✓ 今日已回顾 · " : ""}🔁 ${countOf(c)} 次 · ${L.name}</span>
+      </div>
+    </div>`;
+  }).join("");
+}
+function togglePrincipleTag(t) {
+  activePrincipleTag = activePrincipleTag === t ? null : t;
+  renderPrinciples();
+}
+
+function openPrincipleDetail(id) {
+  const c = cards.find(x => x.id === id);
+  if (!c) return;
+  const L = levelOf(c);
+  document.getElementById("principleDetailModalBody").innerHTML = `
+    <h2>${esc(c.title)}</h2>
+    <div class="modal-date">${esc(c.date)} · <span class="count-chip lv${L.lv}">${reviewedToday(c) ? "✓ 今日已回顾 · " : ""}🔁 已回顾 ${countOf(c)} 次 · ${L.name}</span></div>
+    <div class="field-block">
+      <div class="field-label"><span class="dot" style="background:var(--gold)"></span>一句话精髓</div>
+      <div class="field-value essence-box">💡 ${esc(c.essence)}</div>
+    </div>
+    <div class="field-block">
+      <div class="field-label"><span class="dot" style="background:var(--accent)"></span>展开用法</div>
+      <div class="field-value">${esc(c.detail)}</div>
+    </div>
+    ${c.source ? `
+    <div class="field-block">
+      <div class="field-label"><span class="dot" style="background:var(--green)"></span>来源（验证经历）</div>
+      <div class="field-value">${esc(c.source)}</div>
+    </div>` : ""}
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="deletePrinciple('${c.id}')">删除</button>
+      <button class="btn" onclick="editPrinciple('${c.id}')">编辑</button>
+      <button class="btn ${reviewedToday(c) ? "" : "btn-primary"}" onclick="togglePrincipleReview('${c.id}', true)">
+        ${reviewedToday(c) ? "↩ 取消今日回顾" : "✓ 今日已回顾"}
+      </button>
+    </div>
+  `;
+  openModal("principleDetailModal");
+}
+/* 思想用"回顾"内化（同反思卡），不用"打卡" */
+function togglePrincipleReview(id, fromDetail) {
+  const c = cards.find(x => x.id === id);
+  if (!c) return;
+  if (!Array.isArray(c.reviews)) c.reviews = [];
+  const t = today();
+  const idx = c.reviews.indexOf(t);
+  if (idx >= 0) {
+    c.reviews.splice(idx, 1);
+    toast("已取消今日回顾");
+  } else {
+    c.reviews.push(t);
+    const L = levelOf(c);
+    toast(`今日已回顾 ✓ 累计 ${countOf(c)} 次 · ${L.name}`);
+  }
+  c.updated = Date.now();
+  saveCards(cards);
+  scheduleSyncPush();
+  if (fromDetail) openPrincipleDetail(id);
+  renderPrinciples();
+}
+function deletePrinciple(id) {
+  if (!confirm("确定删除这条思想？")) return;
+  cards = cards.filter(c => c.id !== id);
+  saveCards(cards);
+  scheduleSyncPush();
+  closeModal("principleDetailModal");
+  renderPrinciples();
+  renderLibrary();
+  toast("已删除");
+}
+
+/* ================= 新建 / AI 提炼思想 ================= */
+function openNewPrinciple() {
+  document.getElementById("rawPrincipleInput").value = "";
+  openModal("newPrincipleModal");
+}
+function manualCreatePrinciple() {
+  closeModal("newPrincipleModal");
+  principleEditingId = null;
+  fillPrincipleForm({ title:"", essence:"", detail:"", source:"", tags:[] });
+  document.getElementById("principleEditModalTitle").textContent = "手动建思想";
+  openModal("principleEditModal");
+}
+
+const AI_PRINCIPLE_PROMPT = `你是一个"认知提炼"助手。用户会描述一段让自己坚信某个道理的经历或感悟。请把它提炼成一条"思想原则"（底层认知/思维模型），严格输出 JSON（不要 markdown 代码块，不要多余文字），字段如下：
+{
+  "title": "思想名称，不超过10字",
+  "essence": "一句话精髓：最浓缩的表达，能当座右铭",
+  "detail": "展开用法：3-5步可操作的要点，每步一行，用①②③编号",
+  "source": "来源：哪段经历验证了它，一两句",
+  "tags": ["1-2个分类标签，如 思维模型/决策/学习/心态/行动"]
+}
+要求：简洁、直接、不鸡汤、禁止空话。`;
+
+async function aiGeneratePrinciple() {
+  const raw = document.getElementById("rawPrincipleInput").value.trim();
+  if (!raw) { toast("先说出那段经历或感悟"); return; }
+  const s = loadSettings();
+  if (!s.apiBase || !s.apiKey || !s.model) {
+    toast("请先在「设置」里配置 AI 接口，或改用「手动填写」");
+    return;
+  }
+  const btn = document.getElementById("aiPrincipleGenBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="loading-dots">AI 提炼中</span>';
+  try {
+    const res = await fetch(s.apiBase.replace(/\/+$/,"") + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + s.apiKey },
+      body: JSON.stringify({
+        model: s.model,
+        messages: [
+          { role: "system", content: AI_PRINCIPLE_PROMPT },
+          { role: "user", content: raw }
+        ],
+        temperature: 0.4
+      })
+    });
+    if (!res.ok) throw new Error("API 返回 " + res.status);
+    const data = await res.json();
+    let text = data.choices[0].message.content.trim();
+    text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    const parsed = JSON.parse(text);
+    closeModal("newPrincipleModal");
+    principleEditingId = null;
+    fillPrincipleForm(parsed);
+    document.getElementById("principleEditModalTitle").textContent = "AI 提炼的思想（可微调）";
+    openModal("principleEditModal");
+  } catch (err) {
+    toast("AI 提炼失败：" + err.message + "，可改用手动填写");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "⚡ AI 提炼思想";
+  }
+}
+
+function fillPrincipleForm(c) {
+  document.getElementById("p_title").value = c.title || "";
+  document.getElementById("p_essence").value = c.essence || "";
+  document.getElementById("p_detail").value = c.detail || "";
+  document.getElementById("p_source").value = c.source || "";
+  document.getElementById("p_tags").value = (c.tags || []).join(",");
+}
+function editPrinciple(id) {
+  const c = cards.find(x => x.id === id);
+  if (!c) return;
+  principleEditingId = id;
+  fillPrincipleForm(c);
+  closeModal("principleDetailModal");
+  document.getElementById("principleEditModalTitle").textContent = "编辑思想";
+  openModal("principleEditModal");
+}
+function savePrincipleCard() {
+  const data = {
+    title: document.getElementById("p_title").value.trim(),
+    essence: document.getElementById("p_essence").value.trim(),
+    detail: document.getElementById("p_detail").value.trim(),
+    source: document.getElementById("p_source").value.trim(),
+    tags: document.getElementById("p_tags").value.split(/[,，]/).map(t => t.trim()).filter(Boolean)
+  };
+  if (!data.title || !data.essence) { toast("思想名称和一句话精髓必填"); return; }
+  if (principleEditingId) {
+    const c = cards.find(x => x.id === principleEditingId);
+    Object.assign(c, data, { updated: Date.now() });
+    toast("已更新");
+  } else {
+    cards.push({ id: "c" + Date.now().toString(36), kind: "principle", date: today(), created: Date.now(), updated: Date.now(), baseCount: 0, reviews: [], ...data });
+    toast("已存入思想库");
+  }
+  saveCards(cards);
+  scheduleSyncPush();
+  closeModal("principleEditModal");
+  renderPrinciples();
+  renderLibrary();
+}
+
+/* ================= 每日回顾 ================= */
+let reviewQueue = [];
+let reviewIdx = 0;
+
+function startReview() {
+  const reflections = cards.filter(c => c.kind === "reflection");
+  if (!reflections.length) { toast("还没有反思卡片，先建一张吧"); return; }
+  // 优先回顾次数最少的卡：按次数升序，取最生疏的一档里随机3张
+  const sorted = [...reflections].sort((a,b) => countOf(a) - countOf(b));
+  const minCount = countOf(sorted[0]);
+  let pool = sorted.filter(c => countOf(c) <= minCount + 1); // 最生疏的一档
+  if (pool.length < 3) pool = sorted.slice(0, Math.min(6, sorted.length));
+  reviewQueue = [...pool].sort(() => Math.random() - .5).slice(0, 3);
+  reviewIdx = 0;
+  document.getElementById("viewLibrary").style.display = "none";
+  document.getElementById("viewReview").style.display = "block";
+  showReviewCard();
+}
+function showReviewCard() {
+  const c = reviewQueue[reviewIdx];
+  const L = levelOf(c);
+  document.getElementById("reviewProgress").textContent =
+    `第 ${reviewIdx+1} / ${reviewQueue.length} 张 · 已回顾 ${countOf(c)} 次 · ${L.name}`;
+  document.getElementById("reviewCardSlot").innerHTML = `
+    <div class="review-card">
+      <h2 style="margin-bottom:4px">${esc(c.title)}</h2>
+      <div class="modal-date">${esc(c.date)}</div>
+      <div class="field-block">
+        <div class="field-label"><span class="dot" style="background:var(--accent)"></span>事件</div>
+        <div class="field-value">${esc(c.event)}</div>
+      </div>
+      <div class="field-block">
+        <div class="field-label"><span class="dot" style="background:var(--gold)"></span>情绪触发点</div>
+        <div class="field-value">${esc(c.trigger)}</div>
+      </div>
+      <div class="field-block">
+        <div class="field-label"><span class="dot" style="background:var(--text-dim)"></span>事实</div>
+        <div class="field-value">${esc(c.fact)}</div>
+      </div>
+      <div class="field-block">
+        <div class="field-label"><span class="dot" style="background:var(--accent)"></span>一句话规则</div>
+        <div class="field-value rule-box">⚡ ${esc(c.rule)}</div>
+      </div>
+      <div class="field-block" style="margin-bottom:0">
+        <div class="field-label"><span class="dot" style="background:var(--red)"></span>认知纠偏</div>
+        <div class="qa-pair">
+          <div class="qa-box assumed"><div class="qa-head">我以为的问题</div>${esc(c.assumed)}</div>
+          <div class="qa-box actual"><div class="qa-head">实际的问题</div>${esc(c.actual)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+  updateReviewToggleBtn();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+/* 回顾模式里的"今日已回顾"开关按钮状态 */
+function updateReviewToggleBtn() {
+  const c = reviewQueue[reviewIdx];
+  const btn = document.getElementById("reviewToggleBtn");
+  if (!c || !btn) return;
+  if (reviewedToday(c)) {
+    btn.textContent = "↩ 取消今日回顾";
+    btn.classList.remove("btn-primary");
+  } else {
+    btn.textContent = "✓ 今日已回顾";
+    btn.classList.add("btn-primary");
+  }
+}
+function toggleCurrentReviewed() {
+  const c = reviewQueue[reviewIdx];
+  if (!c) return;
+  toggleReviewToday(c.id, false);
+  const L = levelOf(c);
+  document.getElementById("reviewProgress").textContent =
+    `第 ${reviewIdx+1} / ${reviewQueue.length} 张 · 已回顾 ${countOf(c)} 次 · ${L.name}`;
+  updateReviewToggleBtn();
+}
+function nextReviewCard() {
+  if (reviewIdx < reviewQueue.length - 1) {
+    reviewIdx++;
+    showReviewCard();
+  } else {
+    exitReview();
+    toast("今日回顾完成 ✅");
+  }
+}
+function exitReview() {
+  document.getElementById("viewReview").style.display = "none";
+  document.getElementById("viewLibrary").style.display = "block";
+  renderLibrary();
+}
+
+/* ================= 设置 / 导入导出 ================= */
+function openSettings() {
+  const s = loadSettings();
+  document.getElementById("s_apiBase").value = s.apiBase || "";
+  document.getElementById("s_apiKey").value = s.apiKey || "";
+  document.getElementById("s_model").value = s.model || "";
+  document.getElementById("s_syncBase").value = s.syncBase || "";
+  document.getElementById("s_token").value = s.token || "";
+  openModal("settingsModal");
+}
+function saveSettings() {
+  const syncBase = document.getElementById("s_syncBase").value.trim();
+  const token = document.getElementById("s_token").value.trim();
+  document.getElementById("s_syncBase").value = syncBase;
+  document.getElementById("s_token").value = token;
+  persistSettings({
+    apiBase: document.getElementById("s_apiBase").value.trim(),
+    apiKey: document.getElementById("s_apiKey").value.trim(),
+    model: document.getElementById("s_model").value.trim(),
+    syncBase, token
+  });
+  closeModal("settingsModal");
+  toast("设置已保存");
+  initSync(); // 配置变更后立即重新同步
+}
+function exportData() {
+  const blob = new Blob([JSON.stringify(cards, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "反思卡片库-" + today() + ".json";
+  a.click();
+  toast("已导出");
+}
+function importData(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const imported = JSON.parse(reader.result);
+      if (!Array.isArray(imported)) throw new Error("格式不对");
+      const ids = new Set(cards.map(c => c.id));
+      const fresh = imported.filter(c => c && c.id && !ids.has(c.id));
+      fresh.forEach(c => { c.updated = Date.now(); });
+      cards = cards.concat(fresh);
+      saveCards(cards);
+      scheduleSyncPush();
+      renderLibrary();
+      toast("导入成功，新增 " + fresh.length + " 张");
+    } catch (err) { toast("导入失败：" + err.message); }
+  };
+  reader.readAsText(file);
+  e.target.value = "";
+}
+
+/* ================= 启动 ================= */
+renderLibrary();
+initSync(); // 启动时与云端双向合并
+</script>
+</body>
+</html>

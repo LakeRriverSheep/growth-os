@@ -87,6 +87,13 @@ const SCHEMA = `
   );
 
   CREATE INDEX IF NOT EXISTS idx_events_date ON events(date);
+
+  -- 思想卡片（reflection-cards 合并进来）：id 由前端生成，data 为卡片 JSON
+  CREATE TABLE IF NOT EXISTS cards (
+    id TEXT PRIMARY KEY,
+    data TEXT NOT NULL DEFAULT '{}',
+    updated INTEGER DEFAULT 0
+  );
 `;
 
 type SqlValue = string | number | null;
