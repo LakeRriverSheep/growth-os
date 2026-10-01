@@ -32,6 +32,10 @@ export default function SceneNotes({
   const [text, setText] = useState("");
   const [note, setNote] = useState("");
   const [type, setType] = useState<"word" | "sentence">("word");
+  // 行内编辑：点已记录的条目可补/改中文意思
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [editNote, setEditNote] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,11 +77,113 @@ export default function SceneNotes({
 
   async function remove(id: string) {
     await fetch(`/api/ielts/notes?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    if (editingId === id) setEditingId(null);
+    load();
+  }
+
+  function startEdit(n: Note) {
+    setEditingId(n.id);
+    setEditText(n.text);
+    setEditNote(n.note);
+  }
+
+  async function saveEdit() {
+    const n = notes.find((x) => x.id === editingId);
+    const t = editText.trim();
+    if (!n || !t) return;
+    await fetch("/api/ielts/notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: n.id,
+        kind: n.kind,
+        scene: n.scene,
+        type: n.type,
+        text: t,
+        note: editNote.trim(),
+      }),
+    });
+    setEditingId(null);
     load();
   }
 
   const words = notes.filter((n) => n.type === "word");
   const sentences = notes.filter((n) => n.type === "sentence");
+
+  // 单条记录：查看态（点 ✎ / ＋中文 进入编辑）与编辑态
+  // 注意：用普通函数返回 JSX 而不是内部组件，避免每次输入重挂载输入框打断中文输入法
+  function renderNoteItem(n: Note, isWord: boolean) {
+    if (editingId === n.id) {
+      return (
+        <li key={n.id} className="rounded-xl border border-zinc-600 bg-zinc-900/60 px-3 py-2">
+          <div className="flex flex-col gap-2">
+            <input
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && saveEdit()}
+              autoFocus
+              className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-sm outline-none focus:border-zinc-500"
+            />
+            <input
+              value={editNote}
+              onChange={(e) => setEditNote(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && saveEdit()}
+              placeholder={isWord ? "中文意思 / 同义替换" : "备注 / 要点"}
+              className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-sm outline-none placeholder:text-zinc-600 focus:border-zinc-500"
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={saveEdit}
+                className="rounded-lg bg-zinc-100 px-3 py-1 text-xs text-zinc-900 hover:bg-zinc-300"
+              >
+                保存
+              </button>
+              <button
+                onClick={() => setEditingId(null)}
+                className="rounded-lg border border-zinc-700 px-3 py-1 text-xs text-zinc-400 hover:border-zinc-500"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </li>
+      );
+    }
+    return (
+      <li key={n.id} className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <p className={isWord ? "text-sm text-zinc-200" : "text-[13px] leading-6 text-zinc-200"}>
+            {n.text}
+          </p>
+          {n.note ? (
+            <p className="text-[11px] text-zinc-500">{n.note}</p>
+          ) : (
+            <button
+              onClick={() => startEdit(n)}
+              className="mt-0.5 text-[11px] text-zinc-600 hover:text-zinc-300"
+            >
+              ＋ 记中文意思
+            </button>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            onClick={() => startEdit(n)}
+            title="编辑"
+            className="text-xs text-zinc-600 hover:text-zinc-300"
+          >
+            ✎
+          </button>
+          <button
+            onClick={() => remove(n.id)}
+            className="text-xs text-zinc-600 hover:text-red-400"
+          >
+            ✕
+          </button>
+        </div>
+      </li>
+    );
+  }
 
   return (
     <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100">
@@ -166,45 +272,13 @@ export default function SceneNotes({
               <div>
                 <p className="mb-2 text-[11px] uppercase tracking-wider text-zinc-500">生词</p>
                 <ul className="space-y-1.5">
-                  {words.map((n) => (
-                    <li
-                      key={n.id}
-                      className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm text-zinc-200">{n.text}</p>
-                        {n.note && <p className="text-[11px] text-zinc-500">{n.note}</p>}
-                      </div>
-                      <button
-                        onClick={() => remove(n.id)}
-                        className="text-xs text-zinc-600 hover:text-red-400"
-                      >
-                        ✕
-                      </button>
-                    </li>
-                  ))}
+                  {words.map((n) => renderNoteItem(n, true))}
                 </ul>
               </div>
               <div>
                 <p className="mb-2 text-[11px] uppercase tracking-wider text-zinc-500">句子</p>
                 <ul className="space-y-1.5">
-                  {sentences.map((n) => (
-                    <li
-                      key={n.id}
-                      className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[13px] leading-6 text-zinc-200">{n.text}</p>
-                        {n.note && <p className="text-[11px] text-zinc-500">{n.note}</p>}
-                      </div>
-                      <button
-                        onClick={() => remove(n.id)}
-                        className="text-xs text-zinc-600 hover:text-red-400"
-                      >
-                        ✕
-                      </button>
-                    </li>
-                  ))}
+                  {sentences.map((n) => renderNoteItem(n, false))}
                 </ul>
               </div>
             </div>
