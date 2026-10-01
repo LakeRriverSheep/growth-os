@@ -4,7 +4,8 @@ import { safeJson, strField, jsonErr } from "@/lib/http";
 
 // 雅思：听力 / 阅读 按场景记录的生词与句子
 // GET    /api/ielts/notes?kind=listening&scene=求职
-// POST   /api/ielts/notes  body: { id, kind, scene, type, text, note }
+// POST   /api/ielts/notes  body: { id, kind, scene, type, text, meaning?, syn?, note? }
+//        生词用 meaning(中文意思) + syn(同义替换)，句子用 note(备注/要点)
 // DELETE /api/ielts/notes?id=xx
 
 export async function GET(req: NextRequest) {
@@ -17,10 +18,12 @@ export async function GET(req: NextRequest) {
       scene: string;
       type: string;
       text: string;
+      meaning: string;
+      syn: string;
       note: string;
       created_at: string;
     }>(
-      "SELECT id, kind, scene, type, text, note, created_at FROM ielts_notes WHERE kind = ? AND scene = ? ORDER BY created_at DESC",
+      "SELECT id, kind, scene, type, text, meaning, syn, note, created_at FROM ielts_notes WHERE kind = ? AND scene = ? ORDER BY created_at DESC",
       kind,
       scene,
     );
@@ -33,22 +36,27 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await safeJson(req);
   if (!body) return jsonErr("请求体必须是 JSON 对象");
-  const id = strField(body.id, 64);
+  // id 可由前端传入（编辑已有条目），新增时不传则服务端生成
+  const id = strField(body.id, 64) || `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   const kind = strField(body.kind, 20);
   const scene = strField(body.scene, 40);
   const type = strField(body.type, 20);
   const text = strField(body.text, 500);
+  const meaning = strField(body.meaning, 500);
+  const syn = strField(body.syn, 500);
   const note = strField(body.note, 500);
   if (!id || !kind || !scene || !type || !text) return jsonErr("字段不完整");
   try {
     await dbRun(
-      `INSERT INTO ielts_notes (id, kind, scene, type, text, note) VALUES (?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET text = excluded.text, note = excluded.note`,
+      `INSERT INTO ielts_notes (id, kind, scene, type, text, meaning, syn, note) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET text = excluded.text, meaning = excluded.meaning, syn = excluded.syn, note = excluded.note`,
       id,
       kind,
       scene,
       type,
       text,
+      meaning,
+      syn,
       note,
     );
     return NextResponse.json({ ok: true });

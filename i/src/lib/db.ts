@@ -101,8 +101,10 @@ const SCHEMA = `
     kind TEXT NOT NULL DEFAULT '',   -- listening | reading
     scene TEXT NOT NULL DEFAULT '',  -- 场景名
     type TEXT NOT NULL DEFAULT '',   -- word | sentence
-    text TEXT NOT NULL DEFAULT '',
-    note TEXT DEFAULT '',
+    text TEXT NOT NULL DEFAULT '',   -- 单词/句子原文
+    meaning TEXT DEFAULT '',         -- 中文意思（生词用）
+    syn TEXT DEFAULT '',             -- 同义替换（生词用）
+    note TEXT DEFAULT '',            -- 备注/要点（句子用）
     created_at TEXT DEFAULT (datetime('now', 'localtime'))
   );
   CREATE INDEX IF NOT EXISTS idx_ielts_notes ON ielts_notes(kind, scene);
@@ -147,6 +149,20 @@ let local: DatabaseSync | null = null;
 let remote: Client | null = null;
 let ready: Promise<void> | null = null;
 
+// 轻量迁移：给已存在的库补新列（新库建表时已带，重复添加报错直接忽略）
+const MIGRATIONS = [
+  "ALTER TABLE ielts_notes ADD COLUMN meaning TEXT DEFAULT ''",
+  "ALTER TABLE ielts_notes ADD COLUMN syn TEXT DEFAULT ''",
+];
+
+async function exec(sql: string): Promise<void> {
+  if (remote) {
+    await remote.executeMultiple(sql);
+    return;
+  }
+  local!.exec(sql);
+}
+
 async function init(): Promise<void> {
   if (useTurso) {
     const { createClient } = await import("@libsql/client");
@@ -154,7 +170,6 @@ async function init(): Promise<void> {
       url: process.env.TURSO_DATABASE_URL as string,
       authToken: process.env.TURSO_AUTH_TOKEN,
     });
-    await remote.executeMultiple(SCHEMA);
   } else {
     const { DatabaseSync } = await import("node:sqlite");
     const fs = await import("node:fs");
@@ -162,7 +177,14 @@ async function init(): Promise<void> {
     const dataDir = path.join(process.cwd(), "data");
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     local = new DatabaseSync(path.join(dataDir, "i.db"));
-    local.exec(SCHEMA);
+  }
+  await exec(SCHEMA);
+  for (const sql of MIGRATIONS) {
+    try {
+      await exec(sql);
+    } catch {
+      // 列已存在，忽略
+    }
   }
 }
 

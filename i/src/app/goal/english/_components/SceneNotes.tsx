@@ -3,15 +3,21 @@ import { useCallback, useEffect, useState } from "react";
 import PageHeader from "@/app/_components/PageHeader";
 
 // 听力 / 阅读 共用：场景列表 → 点进去记生词和句子
+// 生词三个独立字段：text(单词/词组) + meaning(中文意思) + syn(同义替换)
+// 句子两个字段：text(句子) + note(备注/要点)
 type Note = {
   id: string;
   kind: string;
   scene: string;
   type: string;
   text: string;
+  meaning: string;
+  syn: string;
   note: string;
   created_at: string;
 };
+
+const EMPTY = { text: "", meaning: "", syn: "", note: "" };
 
 export default function SceneNotes({
   kind,
@@ -29,13 +35,14 @@ export default function SceneNotes({
   const [scene, setScene] = useState<string>(scenes[0]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(false);
-  const [text, setText] = useState("");
-  const [note, setNote] = useState("");
   const [type, setType] = useState<"word" | "sentence">("word");
-  // 行内编辑：点已记录的条目可补/改中文意思
+  const [form, setForm] = useState({ ...EMPTY });
+  // 行内编辑：点已记录的条目可补/改任意字段
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editText, setEditText] = useState("");
-  const [editNote, setEditNote] = useState("");
+  const [edit, setEdit] = useState({ ...EMPTY });
+
+  const setF = (k: keyof typeof EMPTY, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const setE = (k: keyof typeof EMPTY, v: string) => setEdit((f) => ({ ...f, [k]: v }));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -56,22 +63,22 @@ export default function SceneNotes({
   }, [load]);
 
   async function add() {
-    const t = text.trim();
+    const t = form.text.trim();
     if (!t) return;
     await fetch("/api/ielts/notes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         kind,
         scene,
         type,
         text: t,
-        note: note.trim(),
+        meaning: form.meaning.trim(),
+        syn: form.syn.trim(),
+        note: form.note.trim(),
       }),
     });
-    setText("");
-    setNote("");
+    setForm({ ...EMPTY });
     load();
   }
 
@@ -83,13 +90,12 @@ export default function SceneNotes({
 
   function startEdit(n: Note) {
     setEditingId(n.id);
-    setEditText(n.text);
-    setEditNote(n.note);
+    setEdit({ text: n.text, meaning: n.meaning, syn: n.syn, note: n.note });
   }
 
   async function saveEdit() {
     const n = notes.find((x) => x.id === editingId);
-    const t = editText.trim();
+    const t = edit.text.trim();
     if (!n || !t) return;
     await fetch("/api/ielts/notes", {
       method: "POST",
@@ -100,7 +106,9 @@ export default function SceneNotes({
         scene: n.scene,
         type: n.type,
         text: t,
-        note: editNote.trim(),
+        meaning: edit.meaning.trim(),
+        syn: edit.syn.trim(),
+        note: edit.note.trim(),
       }),
     });
     setEditingId(null);
@@ -110,27 +118,74 @@ export default function SceneNotes({
   const words = notes.filter((n) => n.type === "word");
   const sentences = notes.filter((n) => n.type === "sentence");
 
-  // 单条记录：查看态（点 ✎ / ＋中文 进入编辑）与编辑态
+  // 输入行：生词三栏 / 句子两行，add 与 edit 复用
+  function inputRows(
+    v: typeof EMPTY,
+    set: (k: keyof typeof EMPTY, val: string) => void,
+    onSubmit: () => void,
+  ) {
+    const cls =
+      "w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm outline-none placeholder:text-zinc-600 focus:border-zinc-600";
+    if (type === "word") {
+      return (
+        <div className="flex flex-col gap-2">
+          <input
+            value={v.text}
+            onChange={(e) => set("text", e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && onSubmit()}
+            placeholder="单词 / 词组"
+            className={cls}
+          />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <input
+              value={v.meaning}
+              onChange={(e) => set("meaning", e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && onSubmit()}
+              placeholder="中文意思"
+              className={cls}
+            />
+            <input
+              value={v.syn}
+              onChange={(e) => set("syn", e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && onSubmit()}
+              placeholder="同义替换"
+              className={cls}
+            />
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className="flex flex-col gap-2">
+        <input
+          value={v.text}
+          onChange={(e) => set("text", e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && onSubmit()}
+          placeholder="值得一记的句子"
+          className={cls}
+        />
+        <input
+          value={v.note}
+          onChange={(e) => set("note", e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && onSubmit()}
+          placeholder="备注 / 要点（可留空）"
+          className={cls}
+        />
+      </div>
+    );
+  }
+
+  // 单条记录：查看态（点 ✎ / ＋补充 进入编辑）与编辑态
   // 注意：用普通函数返回 JSX 而不是内部组件，避免每次输入重挂载输入框打断中文输入法
   function renderNoteItem(n: Note, isWord: boolean) {
     if (editingId === n.id) {
       return (
-        <li key={n.id} className="rounded-xl border border-zinc-600 bg-zinc-900/60 px-3 py-2">
+        <li
+          key={n.id}
+          className="rounded-xl border border-zinc-600 bg-zinc-900/60 px-3 py-2.5"
+        >
           <div className="flex flex-col gap-2">
-            <input
-              value={editText}
-              onChange={(e) => setEditText(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && saveEdit()}
-              autoFocus
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-sm outline-none focus:border-zinc-500"
-            />
-            <input
-              value={editNote}
-              onChange={(e) => setEditNote(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && saveEdit()}
-              placeholder={isWord ? "中文意思 / 同义替换" : "备注 / 要点"}
-              className="w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 py-1.5 text-sm outline-none placeholder:text-zinc-600 focus:border-zinc-500"
-            />
+            {inputRows(edit, setE, saveEdit)}
             <div className="flex gap-2">
               <button
                 onClick={saveEdit}
@@ -149,20 +204,32 @@ export default function SceneNotes({
         </li>
       );
     }
+    // 兼容旧数据：生词只有 note（旧版混记意思）时按中文意思展示
+    const meaning = isWord ? n.meaning || n.note : n.note;
+    const empty = isWord ? !meaning && !n.syn : !n.note;
     return (
-      <li key={n.id} className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2">
+      <li
+        key={n.id}
+        className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2"
+      >
         <div className="min-w-0 flex-1">
           <p className={isWord ? "text-sm text-zinc-200" : "text-[13px] leading-6 text-zinc-200"}>
             {n.text}
           </p>
-          {n.note ? (
-            <p className="text-[11px] text-zinc-500">{n.note}</p>
+          {isWord ? (
+            <>
+              {meaning && <p className="mt-0.5 text-xs text-zinc-400">{meaning}</p>}
+              {n.syn && <p className="mt-0.5 text-[11px] text-zinc-500">≈ {n.syn}</p>}
+            </>
           ) : (
+            n.note && <p className="mt-0.5 text-[11px] text-zinc-500">{n.note}</p>
+          )}
+          {empty && (
             <button
               onClick={() => startEdit(n)}
               className="mt-0.5 text-[11px] text-zinc-600 hover:text-zinc-300"
             >
-              ＋ 记中文意思
+              ＋ 补充中文意思
             </button>
           )}
         </div>
@@ -219,7 +286,7 @@ export default function SceneNotes({
             </span>
           </div>
 
-          {/* 添加 */}
+          {/* 添加：先选类型，每个字段在记下之前就有独立填写位 */}
           <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
             <div className="flex gap-2">
               {(["word", "sentence"] as const).map((t) => (
@@ -236,28 +303,13 @@ export default function SceneNotes({
                 </button>
               ))}
             </div>
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-              <input
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && add()}
-                placeholder={type === "word" ? "单词 / 词组" : "值得一记的句子"}
-                className="flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm outline-none placeholder:text-zinc-600 focus:border-zinc-600"
-              />
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && add()}
-                placeholder="意思 / 同义替换（可留空）"
-                className="flex-1 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm outline-none placeholder:text-zinc-600 focus:border-zinc-600"
-              />
-              <button
-                onClick={add}
-                className="rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-200 hover:border-zinc-500"
-              >
-                记下
-              </button>
-            </div>
+            <div className="mt-3">{inputRows(form, setF, add)}</div>
+            <button
+              onClick={add}
+              className="mt-3 w-full rounded-xl border border-zinc-700 py-2 text-sm text-zinc-200 hover:border-zinc-500 sm:w-auto sm:px-6"
+            >
+              记下
+            </button>
           </div>
 
           {/* 列表 */}
