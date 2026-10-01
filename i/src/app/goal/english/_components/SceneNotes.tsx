@@ -212,7 +212,12 @@ export default function SceneNotes({
         key={n.id}
         className="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900/40 px-3 py-2"
       >
-        <div className="min-w-0 flex-1">
+        {/* 点文字直接进编辑，不需要额外的编辑按钮 */}
+        <div
+          className="min-w-0 flex-1 cursor-pointer"
+          onClick={() => startEdit(n)}
+          title="点击编辑"
+        >
           <p className={isWord ? "text-sm text-zinc-200" : "text-[13px] leading-6 text-zinc-200"}>
             {n.text}
           </p>
@@ -225,22 +230,10 @@ export default function SceneNotes({
             n.note && <p className="mt-0.5 text-[11px] text-zinc-500">{n.note}</p>
           )}
           {empty && (
-            <button
-              onClick={() => startEdit(n)}
-              className="mt-0.5 text-[11px] text-zinc-600 hover:text-zinc-300"
-            >
-              ＋ 补充中文意思
-            </button>
+            <p className="mt-0.5 text-[11px] text-zinc-600">＋ 补充中文意思</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            onClick={() => startEdit(n)}
-            title="编辑"
-            className="text-xs text-zinc-600 hover:text-zinc-300"
-          >
-            ✎
-          </button>
           <button
             onClick={() => remove(n.id)}
             className="text-xs text-zinc-600 hover:text-red-400"
