@@ -1,4 +1,5 @@
 import PageHeader from "@/app/_components/PageHeader";
+import DailyGoals from "./_components/DailyGoals";
 import { identity } from "@/lib/identity";
 
 export const metadata = { title: "我 · I" };
@@ -89,6 +90,15 @@ export default function MePage() {
               </li>
             ))}
           </ul>
+        </section>
+
+        {/* ⑤ 每日目标 */}
+        <section id="daily" className="mt-8 scroll-mt-4 border-t border-zinc-900 pt-6">
+          <h2 className="text-sm font-semibold text-zinc-200">⑤ 每日目标</h2>
+          <p className="mt-1 text-xs text-zinc-500">
+            身份层落到今天：每天要达成的行动、每周要达成的次数，以及厉害的人每天实际会做的行为。
+          </p>
+          <DailyGoals />
         </section>
 
         {/* 每日四问 */}

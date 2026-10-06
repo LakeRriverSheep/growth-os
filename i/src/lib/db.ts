@@ -109,6 +109,23 @@ const SCHEMA = `
   );
   CREATE INDEX IF NOT EXISTS idx_ielts_notes ON ielts_notes(kind, scene);
 
+  -- 每日目标：当天各项完成量（雅思小时数 / 健身小时数 / 专业课节数）
+  CREATE TABLE IF NOT EXISTS daily_goals (
+    date TEXT NOT NULL,
+    item TEXT NOT NULL,
+    value REAL NOT NULL DEFAULT 0,
+    updated_at TEXT DEFAULT (datetime('now', 'localtime')),
+    PRIMARY KEY (date, item)
+  );
+  CREATE INDEX IF NOT EXISTS idx_daily_goals_date ON daily_goals(date);
+
+  -- 我 · 长期建档清单（认知/见识/能力）：达成即勾，不按天重置
+  CREATE TABLE IF NOT EXISTS me_flags (
+    key TEXT PRIMARY KEY,
+    done INTEGER DEFAULT 0,
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
+
   -- 雅思：口语题目（Part 1/2/3）
   CREATE TABLE IF NOT EXISTS ielts_speaking (
     id TEXT PRIMARY KEY,
