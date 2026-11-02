@@ -52,6 +52,20 @@ export default function Home() {
           </p>
         </Link>
 
+        {/* 周复盘：一周只回看一次，把散在各处的截图拼成一页 */}
+        <Link
+          href="/week"
+          className="mt-3 block rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 transition-colors hover:border-zinc-600"
+        >
+          <div className="flex items-center justify-between">
+            <p className="text-lg font-semibold">🧾 周复盘</p>
+            <span className="text-xs text-zinc-500">上传截图 · 生成周报 · 出片 →</span>
+          </div>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">
+            训练、饮食、睡眠、学习，周末一口气丢进来。
+          </p>
+        </Link>
+
         {/* 大板块网格 */}
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
           {sections.map((s) => (
