@@ -149,8 +149,12 @@ export default function Planner() {
   );
 
   const board = useMemo(
-    () => cols.map((d) => ({ date: d, blocks: buildDay(d, coursesOnDate(d), events) })),
-    [cols, events],
+    () =>
+      cols.map((d) => ({
+        date: d,
+        blocks: buildDay(d, coursesOnDate(d), events, layout.hourH),
+      })),
+    [cols, events, layout.hourH],
   );
 
   /** 本周最早的一个日程开始时间（用于首屏滚动定位） */

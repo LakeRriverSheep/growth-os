@@ -14,6 +14,7 @@ import {
   axisRange,
   buildDay,
   layoutColumn,
+  MIN_BLOCK_PX,
   parityLabel,
   pctHeight,
   pctTop,
@@ -147,6 +148,48 @@ test("每周重复的日程：按星期几命中，单次日程只命中当天",
     [1], // 下个周四：只剩每周重复的那个
   );
   assert.deepEqual(eventsForDate("2026-09-21", evs).map((e) => e.id), []); // 周一：都不命中
+});
+
+test("短任务不被裁掉：10 分钟事件也撑到最小高度，相邻短事件左右分列", () => {
+  const events: PlanEvent[] = [
+    { id: 1, date: "2026-09-16", start: "10:00", end: "10:10", title: "喝水", kind: "life", note: "", weekly: false },
+    { id: 2, date: "2026-09-16", start: "10:10", end: "10:20", title: "拉伸", kind: "life", note: "", weekly: false },
+  ];
+  const hourH = 56;
+  const blocks = buildDay("2026-09-16", [], events, hourH);
+
+  assert.equal(blocks.length, 2);
+  const contentH = hourH * 18; // 05:00–23:00 共 18 格
+  for (const b of blocks) {
+    const px = (b.height / 100) * contentH;
+    assert.ok(
+      px >= MIN_BLOCK_PX - 0.5,
+      `${b.title} 块高 ${px.toFixed(1)}px，应不小于 ${MIN_BLOCK_PX}px`,
+    );
+  }
+
+  // 两个 10 分钟任务视觉高度被拉长后时间重叠 → 左右分列，而不是上下叠成细条
+  assert.deepEqual(
+    blocks.map((b) => [b.col, b.cols]),
+    [
+      [0, 2],
+      [1, 2],
+    ],
+  );
+});
+
+test("贴近 23:00 的短任务：整体上移补足最小高度，不溢出时间轴", () => {
+  const events: PlanEvent[] = [
+    { id: 3, date: "2026-09-16", start: "22:55", end: "23:00", title: "收尾", kind: "life", note: "", weekly: false },
+  ];
+  const hourH = 56;
+  const [b] = buildDay("2026-09-16", [], events, hourH);
+
+  const contentH = hourH * 18;
+  const px = (b.height / 100) * contentH;
+  assert.ok(px >= MIN_BLOCK_PX - 0.5, `块高 ${px.toFixed(1)}px 应不小于 ${MIN_BLOCK_PX}px`);
+  // 底边不能越过 23:00（100%）
+  assert.ok(b.top + b.height <= 100 + 1e-9, `底边 ${(b.top + b.height).toFixed(2)}% 应不越过 100%`);
 });
 
 test("buildDay：课程与自定义日程合并，既带定位也带可编辑原对象", () => {

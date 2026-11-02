@@ -109,16 +109,25 @@ export function axisRange(start: string, end: string): { s: number; e: number } 
 // ── 重叠布局 ────────────────────────────────────────────────
 export type Placed<E> = { item: E; col: number; cols: number };
 
+/** 事件块最小可视高度（px）：短事件也至少撑到能显示「标题 + 起止时间」一行的高度，不再被裁成细条 */
+export const MIN_BLOCK_PX = 30;
+
 /**
  * 同一列里时间重叠的日程并排摆放。
  * 做法：按开始时间排序 → 贪心分配到第一个空闲子列 → 同一「连通簇」内统一列数。
+ * minDurMin：每个事件的最小「视觉时长」（分钟）。短事件实际只有几分钟，但渲染会撑到
+ * 最小高度，把它拉长到 minDurMin 参与重叠判断，相邻短事件就会左右分列而不是上下叠。
  */
-export function layoutColumn<E extends { start: string; end: string }>(items: E[]): Placed<E>[] {
+export function layoutColumn<E extends { start: string; end: string }>(
+  items: E[],
+  minDurMin = 0,
+): Placed<E>[] {
   const list = items
     .map((item) => {
       const s = toMin(item.start);
       let e = toMin(item.end);
       if (Number.isNaN(e) || e <= s) e = s + 30;
+      if (!Number.isNaN(s) && minDurMin > 0) e = Math.max(e, s + minDurMin);
       return { item, s, e: Number.isNaN(s) ? 0 : e };
     })
     .sort((a, b) => a.s - b.s || a.e - b.e);
@@ -196,11 +205,14 @@ export type CourseLike = {
   period?: string;
 };
 
-/** 把「课程 + 自定义日程」合并成一天的可视块列表，附带并排布局与百分比定位 */
+/** 把「课程 + 自定义日程」合并成一天的可视块列表，附带并排布局与百分比定位。
+ *  hourH：每小时对应的像素高度（日历缩放），用于把 MIN_BLOCK_PX 换算成最短可视时长，
+ *  保证短任务也至少显示「标题 + 起止时间」一行，不会被裁成看不见的细条。 */
 export function buildDay(
   date: string,
   courses: CourseLike[],
   events: PlanEvent[],
+  hourH = 56,
 ): DayBlock[] {
   type Raw = {
     key: string;
@@ -252,13 +264,26 @@ export function buildDay(
 
   raws.sort((a, b) => a.s - b.s || a.e - b.e);
 
-  const placed = layoutColumn(raws.map((r) => ({ start: fromMin(r.s), end: fromMin(r.e), raw: r })));
+  // 最短可视时长：把 MIN_BLOCK_PX 按小时高度换算成分钟，短事件据此参与重叠判断并撑开高度。
+  const minDurMin = Math.ceil((MIN_BLOCK_PX / hourH) * 60);
+
+  const placed = layoutColumn(
+    raws.map((r) => ({ start: fromMin(r.s), end: fromMin(r.e), raw: r })),
+    minDurMin,
+  );
 
   return placed
     .map((p) => {
       const raw = p.item.raw;
-      const s = toMin(p.item.start);
-      const e = toMin(p.item.end);
+      const s = raw.s;
+      const e = raw.e;
+      // 短事件的高度撑到至少 minDurMin：优先向下扩，顶到 23:00 就把整块上移补足，保证不被裁。
+      const visDur = Math.min(minDurMin, DAY_SPAN_MIN);
+      let topMin = s;
+      let botMin = Math.min(DAY_END_MIN, Math.max(e, s + visDur));
+      if (botMin - topMin < visDur) {
+        topMin = Math.max(DAY_START_MIN, botMin - visDur);
+      }
       return {
         key: raw.key,
         event: raw.event,
@@ -268,8 +293,8 @@ export function buildDay(
         kind: raw.kind,
         start: raw.start,
         end: raw.end,
-        top: pctTop(s),
-        height: pctHeight(s, e),
+        top: pctTop(topMin),
+        height: pctHeight(topMin, botMin),
         col: p.col,
         cols: p.cols,
       };

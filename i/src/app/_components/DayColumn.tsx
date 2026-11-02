@@ -165,7 +165,9 @@ function TimeBlock({
       {oneLine ? (
         <span className="flex items-baseline gap-1.5 overflow-hidden text-[11px] leading-4">
           <span className="truncate font-semibold text-white">{b.title}</span>
-          <span className="shrink-0 tabular-nums text-white/55">{b.start}</span>
+          <span className="shrink-0 tabular-nums text-white/55">
+            {b.start}–{b.end}
+          </span>
         </span>
       ) : (
         <>
