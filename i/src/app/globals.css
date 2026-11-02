@@ -63,3 +63,15 @@ body {
 .planner-headrow {
   will-change: transform;
 }
+
+/* 自由写：精炼分类卡片依次淡入上移 */
+@keyframes fadein {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

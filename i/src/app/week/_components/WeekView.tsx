@@ -234,7 +234,7 @@ export default function WeekView({
         }
       />
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-5 pb-24 pt-4">
+      <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 pb-24 pt-4 sm:px-6">
         {/* 周切换 */}
         <div className="flex items-center justify-between text-xs text-zinc-500">
           <Link href={`/week?week=${prev}`} className="px-2 py-1 hover:text-zinc-300">
@@ -250,203 +250,43 @@ export default function WeekView({
           </Link>
         </div>
 
-        {/* 上传 */}
-        <section
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragging(false);
-            void onFiles(e.dataTransfer.files);
-          }}
-          className={`mt-3 rounded-2xl border border-dashed p-6 text-center transition-colors ${
-            dragging ? "border-zinc-400 bg-zinc-900" : "border-zinc-800 bg-zinc-900/30"
-          }`}
-        >
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            onChange={(e) => {
-              if (e.target.files) void onFiles(e.target.files);
-              e.target.value = "";
-            }}
-          />
-          <p className="text-sm text-zinc-300">把这一周的截图丢进来</p>
-          <p className="mt-1 text-[11px] leading-5 text-zinc-500">
-            训练记录 · 饭照 · 体重报告 · 课表 · 聊天记录，截图和照片都行
-          </p>
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={!!busy}
-            className="mt-4 rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition-colors hover:border-zinc-500 disabled:opacity-40"
-          >
-            {busy || "选图 / 拖进来 / Ctrl+V"}
-          </button>
-          <p className="mt-3 text-[11px] text-zinc-600">
-            {ai.ready
-              ? `识别引擎：${ai.label}${ai.vision ? "" : "（不支持图片，仅文字）"}`
-              : "未配置 AI key：目前只能存文字"}
-          </p>
-        </section>
-
-        {/* 文字 / 链接 */}
-        <section className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={3}
-            placeholder="也可以直接写：周三练胸，卧推 60kg 8次 4组；周四上了算法课，讲贪心…"
-            className="w-full resize-none bg-transparent text-sm leading-6 text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
-          />
-          <div className="mt-2 flex items-center gap-2 border-t border-zinc-800 pt-3">
-            <input
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="或者粘一个链接"
-              className="min-w-0 flex-1 bg-transparent text-xs text-zinc-300 placeholder:text-zinc-600 focus:outline-none"
+        {items.length === 0 ? (
+          /* 空态：上传区居中放大，占满全宽 */
+          <div className="mx-auto mt-10 max-w-xl">
+            <UploadArea
+              dragging={dragging}
+              setDragging={setDragging}
+              onFiles={onFiles}
+              busy={busy}
+              fileRef={fileRef}
+              ai={ai}
             />
-            <button
-              onClick={() => void submit({ text, url })}
-              disabled={!!busy || (!text.trim() && !url.trim())}
-              className="shrink-0 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-500 disabled:opacity-30"
-            >
-              整理进去
-            </button>
+            <TextArea text={text} setText={setText} url={url} setUrl={setUrl} busy={busy} submit={submit} />
+            {msg && <MsgLine msg={msg} />}
           </div>
-        </section>
-
-        {msg && (
-          <p
-            className={`mt-3 rounded-lg px-3 py-2 text-xs leading-5 ${
-              msg.type === "err"
-                ? "bg-red-950/40 text-red-300"
-                : msg.type === "warn"
-                  ? "bg-amber-950/30 text-amber-300"
-                  : "bg-emerald-950/30 text-emerald-300"
-            }`}
-          >
-            {msg.text}
-          </p>
-        )}
-
-        {/* 本周数据 */}
-        <section className="mt-6">
-          <h2 className="text-sm font-semibold text-zinc-300">这周的数据</h2>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            <Stat label="训练" value={trainingPartLine(stats)} small />
-            <Stat
-              label="有氧"
-              value={stats.cardioKm > 0 ? `${stats.cardioKm} km` : "—"}
-              sub={stats.cardioMin > 0 ? `${stats.cardioMin} 分钟` : ""}
-            />
-            <Stat label="训练日" value={`${stats.trainingDays} 天`} />
-            <Stat
-              label="蛋白 · 日均"
-              value={stats.dietDays > 0 ? `${stats.proteinAvg} g` : "—"}
-              sub={stats.dietDays > 0 ? `记了 ${stats.dietDays} 天` : ""}
-            />
-            <Stat
-              label="碳水 · 日均"
-              value={stats.dietDays > 0 ? `${stats.carbAvg} g` : "—"}
-            />
-            <Stat
-              label="睡眠 · 日均"
-              value={stats.sleepDays > 0 ? `${stats.sleepAvg} h` : "—"}
-            />
-          </div>
-        </section>
-
-        {/* 周报 */}
-        <section className="mt-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-zinc-300">周总结</h2>
-            <button
-              onClick={() => void genReport()}
-              disabled={!!busy || items.length === 0}
-              className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-500 disabled:opacity-30"
-            >
-              {report ? "重写" : "生成"}
-            </button>
-          </div>
-
-          {report ? (
-            <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
-              <p className="text-lg font-semibold leading-7">{report.headline}</p>
-              {report.insight && (
-                <p className="mt-2 text-xs leading-6 text-zinc-400">{report.insight}</p>
-              )}
-
-              <Block title="做到了" items={report.highlights} tone="ok" />
-              <Block title="缺口" items={report.gaps} tone="warn" />
-              <Block title="下周" items={report.next} tone="plain" />
-
-              <p className="mt-4 text-[11px] text-zinc-600">
-                {report.source === "ai" ? "AI 生成" : "模板生成（未配置 AI 或调用失败）"}
-              </p>
+        ) : (
+          <div className="mt-3 grid items-start gap-4 lg:grid-cols-12">
+            {/* 左列：录入 + 条目 */}
+            <div className="space-y-4 lg:col-span-7">
+              <UploadArea
+                dragging={dragging}
+                setDragging={setDragging}
+                onFiles={onFiles}
+                busy={busy}
+                fileRef={fileRef}
+                ai={ai}
+              />
+              <TextArea text={text} setText={setText} url={url} setUrl={setUrl} busy={busy} submit={submit} />
+              {msg && <MsgLine msg={msg} />}
+              {grouped.length > 0 && <ItemList grouped={grouped} total={items.length} onRemove={removeItem} />}
             </div>
-          ) : (
-            <p className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 text-xs leading-6 text-zinc-500">
-              {items.length === 0
-                ? "先传点东西，再生成总结。"
-                : "点「生成」，把这一周的条目浓缩成几句话说清楚。"}
-            </p>
-          )}
-        </section>
 
-        {/* 条目 */}
-        {grouped.length > 0 && (
-          <section className="mt-6">
-            <h2 className="text-sm font-semibold text-zinc-300">
-              本周条目 <span className="text-zinc-600">{items.length}</span>
-            </h2>
-            <div className="mt-3 space-y-4">
-              {grouped.map(({ kind, list }) => (
-                <div key={kind}>
-                  <p className="text-[11px] text-zinc-600">
-                    {KIND_META[kind].emoji} {KIND_META[kind].label} · {list.length}
-                  </p>
-                  <ul className="mt-1.5 space-y-1">
-                    {list.map((it) => (
-                      <li
-                        key={it.id}
-                        className="group flex items-center gap-3 rounded-lg border border-zinc-800/70 px-3 py-2"
-                      >
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs text-zinc-300">
-                            {it.label || KIND_META[kind].label}
-                          </span>
-                          <span className="block truncate text-[11px] text-zinc-600">
-                            {itemSummary(it)}
-                          </span>
-                        </span>
-                        <button
-                          onClick={() => void removeItem(it.id)}
-                          className="shrink-0 text-[11px] text-zinc-700 transition-colors hover:text-red-400"
-                          aria-label="删除"
-                        >
-                          删
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+            {/* 右列：数据 + 周报 */}
+            <div className="space-y-4 lg:col-span-5 lg:sticky lg:top-4">
+              <StatsPanel stats={stats} />
+              <ReportPanel report={report} items={items} busy={busy} onGen={genReport} />
             </div>
-          </section>
-        )}
-
-        {items.length === 0 && (
-          <p className="mt-10 text-center text-xs leading-6 text-zinc-600">
-            这周还是空的。
-            <br />
-            周末花五分钟，把相册里的截图一口气丢进来就够。
-          </p>
+          </div>
         )}
       </main>
 
@@ -459,6 +299,251 @@ export default function WeekView({
         />
       )}
     </div>
+  );
+}
+
+function UploadArea({
+  dragging,
+  setDragging,
+  onFiles,
+  busy,
+  fileRef,
+  ai,
+}: {
+  dragging: boolean;
+  setDragging: (v: boolean) => void;
+  onFiles: (files: FileList | File[]) => void;
+  busy: string;
+  fileRef: React.RefObject<HTMLInputElement | null>;
+  ai: { ready: boolean; vision: boolean; label: string };
+}) {
+  return (
+    <section
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={() => setDragging(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragging(false);
+        void onFiles(e.dataTransfer.files);
+      }}
+      className={`rounded-2xl border border-dashed p-6 text-center transition-colors ${
+        dragging ? "border-zinc-400 bg-zinc-900" : "border-zinc-800 bg-zinc-900/30"
+      }`}
+    >
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          if (e.target.files) void onFiles(e.target.files);
+          e.target.value = "";
+        }}
+      />
+      <p className="text-sm text-zinc-300">把这一周的截图丢进来</p>
+      <p className="mt-1 text-[11px] leading-5 text-zinc-500">
+        训练记录 · 饭照 · 体重报告 · 课表 · 聊天记录，截图和照片都行
+      </p>
+      <button
+        onClick={() => fileRef.current?.click()}
+        disabled={!!busy}
+        className="mt-4 rounded-xl border border-zinc-700 px-4 py-2 text-sm text-zinc-200 transition-colors hover:border-zinc-500 disabled:opacity-40"
+      >
+        {busy || "选图 / 拖进来 / Ctrl+V"}
+      </button>
+      <p className="mt-3 text-[11px] text-zinc-600">
+        {ai.ready
+          ? `识别引擎：${ai.label}${ai.vision ? "" : "（不支持图片，仅文字）"}`
+          : "未配置 AI key：目前只能存文字"}
+      </p>
+    </section>
+  );
+}
+
+function TextArea({
+  text,
+  setText,
+  url,
+  setUrl,
+  busy,
+  submit,
+}: {
+  text: string;
+  setText: (v: string) => void;
+  url: string;
+  setUrl: (v: string) => void;
+  busy: string;
+  submit: (p: { text?: string; url?: string }) => void;
+}) {
+  return (
+    <section className="rounded-2xl border border-zinc-800 bg-zinc-900/30 p-4">
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={3}
+        placeholder="也可以直接写：周三练胸，卧推 60kg 8次 4组；周四上了算法课，讲贪心…"
+        className="w-full resize-none bg-transparent text-sm leading-6 text-zinc-200 placeholder:text-zinc-600 focus:outline-none"
+      />
+      <div className="mt-2 flex items-center gap-2 border-t border-zinc-800 pt-3">
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="或者粘一个链接"
+          className="min-w-0 flex-1 bg-transparent text-xs text-zinc-300 placeholder:text-zinc-600 focus:outline-none"
+        />
+        <button
+          onClick={() => void submit({ text, url })}
+          disabled={!!busy || (!text.trim() && !url.trim())}
+          className="shrink-0 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-500 disabled:opacity-30"
+        >
+          整理进去
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function MsgLine({ msg }: { msg: Msg }) {
+  if (!msg) return null;
+  const color =
+    msg.type === "err"
+      ? "bg-red-950/40 text-red-300"
+      : msg.type === "warn"
+        ? "bg-amber-950/30 text-amber-300"
+        : "bg-emerald-950/30 text-emerald-300";
+  return <p className={`rounded-lg px-3 py-2 text-xs leading-5 ${color}`}>{msg.text}</p>;
+}
+
+function StatsPanel({ stats }: { stats: ReturnType<typeof computeStats> }) {
+  return (
+    <section>
+      <h2 className="text-sm font-semibold text-zinc-300">这周的数据</h2>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Stat label="训练" value={trainingPartLine(stats)} small />
+        <Stat
+          label="有氧"
+          value={stats.cardioKm > 0 ? `${stats.cardioKm} km` : "—"}
+          sub={stats.cardioMin > 0 ? `${stats.cardioMin} 分钟` : ""}
+        />
+        <Stat label="训练日" value={`${stats.trainingDays} 天`} />
+        <Stat
+          label="蛋白 · 日均"
+          value={stats.dietDays > 0 ? `${stats.proteinAvg} g` : "—"}
+          sub={stats.dietDays > 0 ? `记了 ${stats.dietDays} 天` : ""}
+        />
+        <Stat
+          label="碳水 · 日均"
+          value={stats.dietDays > 0 ? `${stats.carbAvg} g` : "—"}
+        />
+        <Stat
+          label="睡眠 · 日均"
+          value={stats.sleepDays > 0 ? `${stats.sleepAvg} h` : "—"}
+        />
+      </div>
+    </section>
+  );
+}
+
+function ReportPanel({
+  report,
+  items,
+  busy,
+  onGen,
+}: {
+  report: WeekReport | null;
+  items: WeekItem[];
+  busy: string;
+  onGen: () => void;
+}) {
+  return (
+    <section>
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-zinc-300">周总结</h2>
+        <button
+          onClick={onGen}
+          disabled={!!busy || items.length === 0}
+          className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 transition-colors hover:border-zinc-500 disabled:opacity-30"
+        >
+          {report ? "重写" : "生成"}
+        </button>
+      </div>
+
+      {report ? (
+        <div className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+          <p className="text-lg font-semibold leading-7">{report.headline}</p>
+          {report.insight && (
+            <p className="mt-2 text-xs leading-6 text-zinc-400">{report.insight}</p>
+          )}
+
+          <Block title="做到了" items={report.highlights} tone="ok" />
+          <Block title="缺口" items={report.gaps} tone="warn" />
+          <Block title="下周" items={report.next} tone="plain" />
+
+          <p className="mt-4 text-[11px] text-zinc-600">
+            {report.source === "ai" ? "AI 生成" : "模板生成（未配置 AI 或调用失败）"}
+          </p>
+        </div>
+      ) : (
+        <p className="mt-3 rounded-2xl border border-zinc-800 bg-zinc-900/30 p-5 text-xs leading-6 text-zinc-500">
+          点「生成」，把这一周的条目浓缩成几句话说清楚。
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ItemList({
+  grouped,
+  total,
+  onRemove,
+}: {
+  grouped: { kind: WeekItemKind; list: WeekItem[] }[];
+  total: number;
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <section>
+      <h2 className="text-sm font-semibold text-zinc-300">
+        本周条目 <span className="text-zinc-600">{total}</span>
+      </h2>
+      <div className="mt-3 space-y-4">
+        {grouped.map(({ kind, list }) => (
+          <div key={kind}>
+            <p className="text-[11px] text-zinc-600">
+              {KIND_META[kind].emoji} {KIND_META[kind].label} · {list.length}
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {list.map((it) => (
+                <li
+                  key={it.id}
+                  className="group flex items-center gap-3 rounded-lg border border-zinc-800/70 px-3 py-2"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs text-zinc-300">
+                      {it.label || KIND_META[kind].label}
+                    </span>
+                    <span className="block truncate text-[11px] text-zinc-600">
+                      {itemSummary(it)}
+                    </span>
+                  </span>
+                  <button
+                    onClick={() => void onRemove(it.id)}
+                    className="shrink-0 text-[11px] text-zinc-700 transition-colors hover:text-red-400"
+                    aria-label="删除"
+                  >
+                    删
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

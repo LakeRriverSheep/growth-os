@@ -21,6 +21,12 @@ const sections = [
     desc: "全天搭配 · 食材库",
   },
   {
+    href: "/write",
+    emoji: "✍️",
+    title: "自由写",
+    desc: "写想法 · AI 精炼",
+  },
+  {
     href: "/cards.html",
     emoji: "🃏",
     title: "思想卡片",
