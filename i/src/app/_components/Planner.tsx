@@ -21,8 +21,8 @@ const TOTAL = 21;
 const ROWS = HOURS.length; // 05:00–23:00 → 18 格
 const AXIS_W = 56; // 左侧时间轴宽度
 const HEAD_H = 52; // 表头行高度
-const MIN_HOUR = 56; // 每小时最小高度：再挤就让它纵向滚动，不硬塞进一屏
-const MAX_HOUR = 120;
+const MIN_HOUR = 96; // 每小时最小高度：单元格要够大，宁可纵向滚动也不把日程挤成一坨
+const MAX_HOUR = 168;
 const NARROW_W = 768; // 窄于此宽度：一屏一天，左右滑动
 
 type Layout = { w: number; h: number; narrow: boolean; hourH: number; sbw: number };
