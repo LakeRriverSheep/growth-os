@@ -178,6 +178,24 @@ test("短任务不被裁掉：10 分钟事件也撑到最小高度，相邻短�
   );
 });
 
+test("短事件后跟着正常事件：不挤成窄列，各自占整列宽", () => {
+  const events: PlanEvent[] = [
+    { id: 4, date: "2026-09-16", start: "10:00", end: "10:10", title: "喝水", kind: "life", note: "", weekly: false },
+    { id: 5, date: "2026-09-16", start: "10:20", end: "12:00", title: "人工智能数学基础", kind: "study", note: "", weekly: false },
+  ];
+  const blocks = buildDay("2026-09-16", [], events, 56);
+
+  assert.equal(blocks.length, 2);
+  // 两者真实时间不重叠（10:10 → 10:20 有空档）：短事件的最小高度不该把长事件挤成半列
+  assert.deepEqual(
+    blocks.map((b) => [b.col, b.cols]),
+    [
+      [0, 1],
+      [0, 1],
+    ],
+  );
+});
+
 test("贴近 23:00 的短任务：整体上移补足最小高度，不溢出时间轴", () => {
   const events: PlanEvent[] = [
     { id: 3, date: "2026-09-16", start: "22:55", end: "23:00", title: "收尾", kind: "life", note: "", weekly: false },

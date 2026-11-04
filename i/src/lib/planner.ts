@@ -113,10 +113,14 @@ export type Placed<E> = { item: E; col: number; cols: number };
 export const MIN_BLOCK_PX = 30;
 
 /**
- * 同一列里时间重叠的日程并排摆放。
+ * 同一列里时间上「真正撞到一起」的日程并排摆放。
  * 做法：按开始时间排序 → 贪心分配到第一个空闲子列 → 同一「连通簇」内统一列数。
- * minDurMin：每个事件的最小「视觉时长」（分钟）。短事件实际只有几分钟，但渲染会撑到
- * 最小高度，把它拉长到 minDurMin 参与重叠判断，相邻短事件就会左右分列而不是上下叠。
+ *
+ * minDurMin（最短可视时长，分钟）用于处理短事件：
+ * - 两个相邻短事件：各自视觉时长都被拉长，于是左右分列，而不是上下叠成细条互相盖标题；
+ * - 短事件后面跟着一个「有间隔的正常事件」：不挤成窄列。短事件的视觉尾巴对长事件是「良性
+ *   重叠」（长事件照旧用真实结束时间找列、DOM 靠后自然盖在短事件空白尾巴之上），
+ *   两者都保持整列宽，谁的内容都不被裁。
  */
 export function layoutColumn<E extends { start: string; end: string }>(
   items: E[],
@@ -127,35 +131,51 @@ export function layoutColumn<E extends { start: string; end: string }>(
       const s = toMin(item.start);
       let e = toMin(item.end);
       if (Number.isNaN(e) || e <= s) e = s + 30;
-      if (!Number.isNaN(s) && minDurMin > 0) e = Math.max(e, s + minDurMin);
-      return { item, s, e: Number.isNaN(s) ? 0 : e };
+      const isShort = minDurMin > 0 && e - s < minDurMin;
+      const ve = isShort ? Math.max(e, s + minDurMin) : e; // 视觉终点
+      return { item, s, e, ve, isShort };
     })
     .sort((a, b) => a.s - b.s || a.e - b.e);
 
   const out: Placed<E>[] = [];
   let cluster: { item: E; col: number }[] = [];
-  let colEnds: number[] = [];
-  let clusterEnd = -1;
+  // 每列两个终点：真实结束（长事件找列用）、视觉终点（短事件找列用）
+  let colTrueEnd: number[] = [];
+  let colVe: number[] = [];
+  let clusterTrueEnd = -1;
+  let clusterVe = -1;
 
   const flush = () => {
-    const cols = Math.max(1, colEnds.length);
+    const cols = Math.max(1, colVe.length);
     for (const c of cluster) out.push({ item: c.item, col: c.col, cols });
     cluster = [];
-    colEnds = [];
-    clusterEnd = -1;
+    colTrueEnd = [];
+    colVe = [];
+    clusterTrueEnd = -1;
+    clusterVe = -1;
   };
 
   for (const it of list) {
-    if (cluster.length && it.s >= clusterEnd) flush();
-    let col = colEnds.findIndex((end) => end <= it.s);
+    // 断簇的判据因长短而异：短事件只要视觉上没碰到簇就断；长事件只认真实时间重叠
+    // （短事件的视觉尾巴不算冲突），这样短×长不会被强行并进同一簇。
+    const mustFlush =
+      cluster.length > 0 && (it.isShort ? it.s >= clusterVe : it.s >= clusterTrueEnd);
+    if (mustFlush) flush();
+
+    let col = it.isShort
+      ? colVe.findIndex((end) => end <= it.s)
+      : colTrueEnd.findIndex((end) => end <= it.s);
     if (col === -1) {
-      colEnds.push(it.e);
-      col = colEnds.length - 1;
+      colTrueEnd.push(it.e);
+      colVe.push(it.ve);
+      col = colTrueEnd.length - 1;
     } else {
-      colEnds[col] = it.e;
+      colTrueEnd[col] = Math.max(colTrueEnd[col], it.e);
+      colVe[col] = Math.max(colVe[col], it.ve);
     }
     cluster.push({ item: it.item, col });
-    clusterEnd = Math.max(clusterEnd, it.e);
+    clusterTrueEnd = Math.max(clusterTrueEnd, it.e);
+    clusterVe = Math.max(clusterVe, it.ve);
   }
   flush();
   return out;
