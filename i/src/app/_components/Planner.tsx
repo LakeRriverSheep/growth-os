@@ -11,21 +11,30 @@ import {
   toMin,
 } from "@/lib/date";
 import { coursesOnDate } from "@/lib/schedule";
-import { DAY_END_MIN, DAY_START_MIN, HOURS, buildDay, type PlanEvent } from "@/lib/planner";
+import {
+  DAY_END_MIN,
+  DAY_START_MIN,
+  buildDay,
+  eventsForDate,
+  hoursInRange,
+  type PlanEvent,
+  type ViewRange,
+} from "@/lib/planner";
 import EventSheet, { type SheetPayload, type SheetState } from "./EventSheet";
 import { DayColumn, DayHead } from "./DayColumn";
 
 /** 前后各缓冲一周：手机上左右滑动时不至于一滑就出头 */
 const PAD = 7;
 const TOTAL = 21;
-const ROWS = HOURS.length; // 05:00–23:00 → 18 格
 const AXIS_W = 56; // 左侧时间轴宽度
 const HEAD_H = 52; // 表头行高度
-const MIN_HOUR = 96; // 每小时最小高度：单元格要够大，宁可纵向滚动也不把日程挤成一坨
+/** 每小时格子最小高度：低于这个就太挤了，宁可纵向滚动。事件少时格子会放大填满屏幕。 */
+const MIN_FLEX_HOUR = 80;
+/** 每小时格子最大高度：事件少、屏幕高时也不超过这个，避免一格顶满半屏 */
 const MAX_HOUR = 168;
 const NARROW_W = 768; // 窄于此宽度：一屏一天，左右滑动
 
-type Layout = { w: number; h: number; narrow: boolean; hourH: number; sbw: number };
+type Layout = { w: number; h: number; narrow: boolean; sbw: number };
 
 function hourLabel(h: number): string {
   return `${String(h).padStart(2, "0")}:00`;
@@ -33,6 +42,43 @@ function hourLabel(h: number): string {
 
 function hourMinLabel(min: number): string {
   return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+}
+
+/**
+ * 根据当前可见天数里的「课程 + 自定义日程」算出要显示的时间段：
+ * 最早事件前留 1 小时、最晚事件后留 1 小时，前后对齐到整点，再钳到 05:00–23:00。
+ * 没有事件时给一段合理的默认窗口。这样格子大小完全跟着事件走，不浪费空白。
+ */
+function computeViewRange(dates: string[], events: PlanEvent[]): ViewRange {
+  let minStart = Infinity;
+  let maxEnd = -Infinity;
+  for (const d of dates) {
+    for (const c of coursesOnDate(d)) {
+      const s = toMin(c.start);
+      const e = toMin(c.end);
+      if (!Number.isNaN(s)) minStart = Math.min(minStart, s);
+      if (!Number.isNaN(e)) maxEnd = Math.max(maxEnd, e);
+    }
+    for (const ev of eventsForDate(d, events)) {
+      const s = toMin(ev.start);
+      const e = toMin(ev.end);
+      if (!Number.isNaN(s)) minStart = Math.min(minStart, s);
+      if (!Number.isNaN(e)) maxEnd = Math.max(maxEnd, e);
+    }
+  }
+  if (minStart === Infinity) return { startMin: 7 * 60, endMin: 22 * 60 };
+
+  let startMin = Math.max(DAY_START_MIN, Math.floor(minStart / 60) * 60 - 60);
+  let endMin = Math.min(DAY_END_MIN, Math.ceil(maxEnd / 60) * 60 + 60);
+
+  // 最小跨度 8 小时：事件太少时别把单格放大到离谱
+  const MIN_SPAN = 8 * 60;
+  if (endMin - startMin < MIN_SPAN) {
+    const mid = (startMin + endMin) / 2;
+    startMin = Math.max(DAY_START_MIN, Math.round((mid - MIN_SPAN / 2) / 60) * 60);
+    endMin = Math.min(DAY_END_MIN, startMin + MIN_SPAN);
+  }
+  return { startMin, endMin };
 }
 
 export default function Planner() {
@@ -46,7 +92,6 @@ export default function Planner() {
     w: 0,
     h: 0,
     narrow: false,
-    hourH: MIN_HOUR,
     sbw: 0,
   });
   const [focusIdx, setFocusIdx] = useState(PAD);
@@ -75,17 +120,10 @@ export default function Planner() {
       const sbw = Math.max(0, el.offsetWidth - el.clientWidth);
       setLayout((prev) => {
         const narrow = w < NARROW_W;
-        const hourH = Math.min(MAX_HOUR, Math.max(MIN_HOUR, h / ROWS));
-        if (
-          prev.w === w &&
-          prev.h === h &&
-          prev.narrow === narrow &&
-          prev.hourH === hourH &&
-          prev.sbw === sbw
-        ) {
+        if (prev.w === w && prev.h === h && prev.narrow === narrow && prev.sbw === sbw) {
           return prev;
         }
-        return { w, h, narrow, hourH, sbw };
+        return { w, h, narrow, sbw };
       });
     };
 
@@ -140,21 +178,34 @@ export default function Planner() {
     return layout.narrow ? Math.max(200, inner) : 0;
   }, [layout.w, layout.narrow]);
 
-  const contentH = layout.hourH * ROWS;
-
   /** 桌面上只渲染本周 7 列（横滑交给手机） */
   const cols = useMemo(
     () => (layout.narrow ? days : days.slice(PAD, PAD + 7)),
     [days, layout.narrow],
   );
 
+  /** 可视时间段跟着当周事件走：事件少时范围收窄、格子放大填满屏幕；事件多时范围拉长 */
+  const viewRange = useMemo(() => computeViewRange(cols, events), [cols, events]);
+  const rangeHours = (viewRange.endMin - viewRange.startMin) / 60;
+
+  /** 每小时格子高度：以填满屏幕为基准，但夹在 [MIN_FLEX_HOUR, MAX_HOUR] 之间 */
+  const hourH = useMemo(() => {
+    if (!layout.h) return MIN_FLEX_HOUR;
+    return Math.min(MAX_HOUR, Math.max(MIN_FLEX_HOUR, layout.h / rangeHours));
+  }, [layout.h, rangeHours]);
+
+  const contentH = hourH * rangeHours;
+
+  /** 时间轴整点刻度（跟着可视范围走） */
+  const hours = useMemo(() => hoursInRange(viewRange), [viewRange]);
+
   const board = useMemo(
     () =>
       cols.map((d) => ({
         date: d,
-        blocks: buildDay(d, coursesOnDate(d), events, layout.hourH),
+        blocks: buildDay(d, coursesOnDate(d), events, hourH, viewRange),
       })),
-    [cols, events, layout.hourH],
+    [cols, events, hourH, viewRange],
   );
 
   /** 本周最早的一个日程开始时间（用于首屏滚动定位） */
@@ -170,13 +221,13 @@ export default function Planner() {
     (min: number, smooth: boolean) => {
       const el = scrollRef.current;
       if (!el) return;
-      const target = Math.max(DAY_START_MIN, min);
+      const target = Math.max(viewRange.startMin, min);
       el.scrollTo({
-        top: ((target - DAY_START_MIN) / 60) * layout.hourH,
+        top: ((target - viewRange.startMin) / 60) * hourH,
         behavior: smooth ? "smooth" : "auto",
       });
     },
-    [layout.hourH],
+    [hourH, viewRange.startMin],
   );
 
   /** 某天最早的一个日程开始时间；没有日程就返回 NaN */
@@ -266,7 +317,7 @@ export default function Planner() {
 
   /** 当前时间落在可视范围内时，时间轴上给一个绿标，和列里的时间线对上 */
   const nowVisible =
-    !!today && cols.includes(today) && nowMin >= DAY_START_MIN && nowMin < DAY_END_MIN;
+    !!today && cols.includes(today) && nowMin >= viewRange.startMin && nowMin < viewRange.endMin;
 
   const openNew = useCallback((date: string, hour: number) => {
     setSheet({
@@ -423,11 +474,11 @@ export default function Planner() {
             className="sticky left-0 z-30 shrink-0 border-r border-zinc-800/80 bg-zinc-950"
             style={{ width: AXIS_W, height: contentH }}
           >
-            {HOURS.map((h) => (
+            {hours.map((h) => (
               <div
                 key={h}
                 className="absolute right-2 text-[11px] leading-none tabular-nums text-zinc-500"
-                style={{ top: (h - HOURS[0]) * layout.hourH + 5 }}
+                style={{ top: ((h * 60 - viewRange.startMin) / 60) * hourH + 5 }}
               >
                 {hourLabel(h)}
               </div>
@@ -436,7 +487,7 @@ export default function Planner() {
             {nowVisible && (
               <div
                 className="absolute right-1 -translate-y-1/2 rounded bg-emerald-500 px-1 py-px text-[10px] font-semibold leading-none tabular-nums text-zinc-950"
-                style={{ top: ((nowMin - DAY_START_MIN) / 60) * layout.hourH }}
+                style={{ top: ((nowMin - viewRange.startMin) / 60) * hourH }}
               >
                 {hourMinLabel(nowMin)}
               </div>
@@ -451,8 +502,10 @@ export default function Planner() {
               isToday={date === today}
               nowMin={nowMin}
               width={layout.narrow ? colW : undefined}
-              hourH={layout.hourH}
+              hourH={hourH}
               contentH={contentH}
+              range={viewRange}
+              hours={hours}
               onBlank={openNew}
               onEdit={(ev) => setSheet({ mode: "edit", event: ev })}
             />

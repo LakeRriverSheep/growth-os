@@ -1,13 +1,11 @@
 "use client";
 import { monthDayCn, toMin, weekdayCn } from "@/lib/date";
 import {
-  DAY_END_MIN,
-  DAY_START_MIN,
-  HOURS,
   KIND_META,
   pctTop,
   type DayBlock,
   type PlanEvent,
+  type ViewRange,
 } from "@/lib/planner";
 
 /** 整点实线 + 半点虚线；随每小时高度自动缩放。
@@ -71,6 +69,8 @@ export function DayColumn({
   width,
   hourH,
   contentH,
+  range,
+  hours,
   onBlank,
   onEdit,
 }: {
@@ -82,9 +82,15 @@ export function DayColumn({
   width?: number;
   hourH: number;
   contentH: number;
+  /** 可视时间范围（随当周事件自适应） */
+  range: ViewRange;
+  /** 可视范围内的整点刻度 */
+  hours: number[];
   onBlank: (date: string, hour: number) => void;
   onEdit: (ev: PlanEvent) => void;
 }) {
+  const spanMin = Math.max(1, range.endMin - range.startMin);
+
   return (
     <div
       className={`relative snap-start border-r border-zinc-800/60 ${
@@ -95,13 +101,13 @@ export function DayColumn({
       {isToday && <div className="pointer-events-none absolute inset-0 bg-emerald-500/[0.045]" />}
 
       {/* 空白格：点一下就在这个整点新建 */}
-      {HOURS.map((h) => (
+      {hours.map((h) => (
         <button
           key={h}
           type="button"
           aria-label={`${date} ${h} 点 新建日程`}
           className="absolute inset-x-0 z-0 transition-colors hover:bg-zinc-600/20"
-          style={{ top: `${pctTop(h * 60)}%`, height: `${100 / HOURS.length}%` }}
+          style={{ top: `${pctTop(h * 60, range)}%`, height: `${(60 / spanMin) * 100}%` }}
           onClick={() => onBlank(date, h)}
         />
       ))}
@@ -111,10 +117,10 @@ export function DayColumn({
       ))}
 
       {/* 当前时间线 */}
-      {isToday && nowMin >= DAY_START_MIN && nowMin < DAY_END_MIN && (
+      {isToday && nowMin >= range.startMin && nowMin < range.endMin && (
         <div
           className="pointer-events-none absolute inset-x-0 z-20"
-          style={{ top: `${pctTop(nowMin)}%` }}
+          style={{ top: `${pctTop(nowMin, range)}%` }}
         >
           <div className="h-[2px] -translate-y-px bg-emerald-400" />
           <div className="absolute left-0 top-1/2 h-[9px] w-[9px] -translate-y-1/2 rounded-full bg-emerald-400" />
