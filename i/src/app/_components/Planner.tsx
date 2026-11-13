@@ -3,23 +3,29 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   addDays,
+  fromMin,
   mondayOf,
   monthDayCn,
   parseYmd,
   termWeek,
   todayYmd,
   toMin,
+  weekdayCn,
 } from "@/lib/date";
 import { coursesOnDate } from "@/lib/schedule";
 import {
   DAY_END_MIN,
   FULL_RANGE,
+  KIND_META,
   buildDay,
   hoursInRange,
+  pctHeight,
+  pctTop,
   type PlanEvent,
 } from "@/lib/planner";
 import EventSheet, { type SheetPayload, type SheetState } from "./EventSheet";
 import { DayColumn, DayHead } from "./DayColumn";
+import { useBlockDrag, type DropResult } from "./useBlockDrag";
 
 /** 前后各缓冲一周：手机上左右滑动时不至于一滑就出头 */
 const PAD = 7;
@@ -305,6 +311,73 @@ export default function Planner() {
     setVersion((v) => v + 1);
   }
 
+  // ── 拖拽：块拖到另一天／另一时段 ───────────────────────────
+  const [toast, setToast] = useState<{ text: string; undoId?: number } | null>(null);
+
+  /** 落点：默认复制（源块不动），按住 Shift 才是移动 */
+  const commitDrop = useCallback(async (r: DropResult) => {
+    const start = fromMin(r.startMin);
+    // 轴尾 24:00 存不进去（TIME_RE 只认 00–23），压到 23:59
+    const end = fromMin(Math.min(r.startMin + r.durMin, DAY_END_MIN - 1));
+    const when = `${weekdayCn(r.date)} ${monthDayCn(r.date)} ${start}–${end}`;
+    const body = {
+      date: r.date,
+      start,
+      end,
+      title: r.ev.title,
+      kind: r.ev.kind,
+      note: r.ev.note,
+      weekly: r.ev.weekly,
+    };
+
+    if (r.mode === "move") {
+      const res = await fetch("/api/events", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: r.ev.id, ...body }),
+      });
+      if (!res.ok) {
+        setToast({ text: "移动失败，稍后再试" });
+        return;
+      }
+      setVersion((v) => v + 1);
+      setToast({ text: `已移动到 ${when}` });
+      return;
+    }
+
+    const res = await fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = res.ok ? ((await res.json()) as { id?: number }) : null;
+    if (!data) {
+      setToast({ text: "复制失败，稍后再试" });
+      return;
+    }
+    setVersion((v) => v + 1);
+    setToast({ text: `已复制到 ${when}`, undoId: data.id });
+  }, []);
+
+  const { tip, begin: beginDrag, consumeClick } = useBlockDrag({
+    range: viewRange,
+    scroller: scrollRef,
+    onDrop: commitDrop,
+  });
+
+  async function undoCopy(id: number) {
+    setToast(null);
+    await fetch(`/api/events?id=${id}`, { method: "DELETE" });
+    setVersion((v) => v + 1);
+  }
+
+  // 提示条 4 秒自动消失
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
   /** 窄屏：按天翻（滑得动就直接滑） */
   function goDay(n: number) {
     if (!layout.narrow) {
@@ -389,6 +462,12 @@ export default function Planner() {
           </span>
         </div>
 
+        {/* 拖拽的用法提示：只在宽屏露出来，窄屏挤不下 */}
+        <span className="ml-auto hidden shrink-0 text-[11px] text-zinc-600 lg:inline">
+          拖动日程块 = 复制到那天
+          <span className="mx-1 text-zinc-700">·</span>
+          按住 Shift 拖动 = 移动
+        </span>
       </header>
 
       {/* 表头：在滚动容器之外，所以纵向永远贴顶；横向靠 translateX 跟着走 */}
@@ -468,8 +547,28 @@ export default function Planner() {
               contentH={contentH}
               range={viewRange}
               hours={hours}
+              draggingKey={tip ? `e:${tip.ev.id}` : null}
+              hint={
+                tip?.target?.date === date
+                  ? {
+                      top: pctTop(tip.target.startMin, viewRange),
+                      height: pctHeight(
+                        tip.target.startMin,
+                        Math.min(tip.target.startMin + tip.durMin, DAY_END_MIN),
+                        viewRange,
+                      ),
+                      text: `${fromMin(tip.target.startMin)}–${fromMin(
+                        Math.min(tip.target.startMin + tip.durMin, DAY_END_MIN),
+                      )} · ${tip.move ? "移动" : "复制"}`,
+                    }
+                  : null
+              }
               onBlank={openNew}
-              onEdit={(ev) => setSheet({ mode: "edit", event: ev })}
+              onEdit={(ev) => {
+                if (consumeClick()) return;
+                setSheet({ mode: "edit", event: ev });
+              }}
+              onBlockDown={beginDrag}
             />
           ))}
         </div>
@@ -482,6 +581,45 @@ export default function Planner() {
           onSave={handleSave}
           onDelete={handleDelete}
         />
+      )}
+
+      {/* 拖动中的浮动小卡片：跟着指针走，内容跟源块一致 */}
+      {tip && (
+        <div
+          className="pointer-events-none fixed z-[60]"
+          style={{ left: tip.x + 14, top: tip.y - 12 }}
+        >
+          <div
+            className={`w-[150px] overflow-hidden rounded-[6px] border px-2 py-[3px] shadow-xl shadow-black/70 ${
+              KIND_META[tip.ev.kind].bg
+            } ${KIND_META[tip.ev.kind].edge}`}
+          >
+            <span className="block truncate text-[12px] font-semibold leading-4 text-white">
+              {tip.ev.title}
+            </span>
+            <span className="block truncate text-[11px] leading-4 tabular-nums text-white/60">
+              {fromMin(tip.target?.startMin ?? tip.origStartMin)}–
+              {fromMin(Math.min((tip.target?.startMin ?? tip.origStartMin) + tip.durMin, DAY_END_MIN))}
+              <span className="ml-1 text-white/40">{tip.move ? "移动" : "复制"}</span>
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* 落地回执 + 撤销 */}
+      {toast && (
+        <div className="fixed bottom-5 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-3 rounded-full border border-zinc-700 bg-zinc-900/95 px-4 py-2 text-xs text-zinc-200 shadow-xl shadow-black/60">
+          <span className="tabular-nums">{toast.text}</span>
+          {toast.undoId ? (
+            <button
+              type="button"
+              className="shrink-0 font-medium text-emerald-400 transition-colors hover:text-emerald-300"
+              onClick={() => undoCopy(toast.undoId!)}
+            >
+              撤销
+            </button>
+          ) : null}
+        </div>
       )}
     </div>
   );

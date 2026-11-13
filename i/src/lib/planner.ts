@@ -110,6 +110,23 @@ function clampMin(min: number): number {
   return Math.max(DAY_START_MIN, Math.min(DAY_END_MIN, min));
 }
 
+/** 拖动的落点 → 目标起点（分钟）。
+ *  - 对齐到 5 分钟，避免拖出 07:23 这种脏时间；
+ *  - 落点离原起点 7 分钟内直接吸附回原起点：横向平拖到另一天就是「同样的时间」；
+ *  - 钳制在可视范围内，并保证整块不出界（end ≤ 轴尾）。 */
+export function snapDropStart(
+  pointerMin: number,
+  grabMin: number,
+  durMin: number,
+  origStartMin: number,
+  range: ViewRange = FULL_RANGE,
+): number {
+  let s = Math.round((pointerMin - grabMin) / 5) * 5;
+  if (Math.abs(s - origStartMin) <= 7) s = origStartMin;
+  const maxStart = Math.max(range.startMin, range.endMin - durMin);
+  return Math.max(range.startMin, Math.min(maxStart, s));
+}
+
 /** 把 [start,end] 钳到时间轴内；完全在轴外返回 null */
 export function axisRange(start: string, end: string): { s: number; e: number } | null {
   let s = toMin(start);

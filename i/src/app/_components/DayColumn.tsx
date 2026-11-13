@@ -60,6 +60,9 @@ export function DayHead({
   );
 }
 
+/** 拖动落点提示：目标列上画一个虚线框，告诉你会落在几点 */
+export type DropHint = { top: number; height: number; text: string };
+
 /** 一天的列：网格线在下、日程块在上、当前时间线压在最上 */
 export function DayColumn({
   date,
@@ -71,8 +74,11 @@ export function DayColumn({
   contentH,
   range,
   hours,
+  hint,
+  draggingKey,
   onBlank,
   onEdit,
+  onBlockDown,
 }: {
   date: string;
   blocks: DayBlock[];
@@ -86,13 +92,20 @@ export function DayColumn({
   range: ViewRange;
   /** 可视范围内的整点刻度 */
   hours: number[];
+  /** 拖动中、落点在本列时给的虚线框 */
+  hint?: DropHint | null;
+  /** 正在被拖走的块 key（半透明，提示「它是源」） */
+  draggingKey?: string | null;
   onBlank: (date: string, hour: number) => void;
   onEdit: (ev: PlanEvent) => void;
+  onBlockDown?: (e: React.PointerEvent<HTMLElement>, b: DayBlock, date: string) => void;
 }) {
   const spanMin = Math.max(1, range.endMin - range.startMin);
 
   return (
     <div
+      // data-date 是拖拽落点识别的锚：指针在哪个列上，就复制到哪一天
+      data-date={date}
       className={`relative snap-start border-r border-zinc-800/60 ${
         width ? "shrink-0" : "min-w-0 flex-1"
       }`}
@@ -113,8 +126,27 @@ export function DayColumn({
       ))}
 
       {blocks.map((b) => (
-        <TimeBlock key={b.key} b={b} hourH={hourH} onEdit={onEdit} />
+        <TimeBlock
+          key={b.key}
+          b={b}
+          hourH={hourH}
+          dimmed={!!draggingKey && b.key === draggingKey}
+          onEdit={onEdit}
+          onDown={onBlockDown ? (e) => onBlockDown(e, b, date) : undefined}
+        />
       ))}
+
+      {/* 拖动落点：虚线框 + 目标起止时间 */}
+      {hint && (
+        <div
+          className="pointer-events-none absolute inset-x-[2px] z-20 overflow-hidden rounded-[6px] border-2 border-dashed border-emerald-400/80 bg-emerald-400/15 px-2 py-0.5"
+          style={{ top: `${hint.top}%`, height: `calc(${hint.height}% - 3px)` }}
+        >
+          <span className="block truncate text-[11px] font-medium leading-4 tabular-nums text-emerald-100">
+            {hint.text}
+          </span>
+        </div>
+      )}
 
       {/* 当前时间线 */}
       {isToday && nowMin >= range.startMin && nowMin < range.endMin && (
@@ -136,11 +168,16 @@ export function DayColumn({
 function TimeBlock({
   b,
   hourH,
+  dimmed,
   onEdit,
+  onDown,
 }: {
   b: DayBlock;
   hourH: number;
+  /** 正在被拖走：压暗，让「源」和「落点」一眼分开 */
+  dimmed?: boolean;
   onEdit: (ev: PlanEvent) => void;
+  onDown?: (e: React.PointerEvent<HTMLElement>) => void;
 }) {
   const meta = KIND_META[b.kind];
   const px = ((toMin(b.end) - toMin(b.start)) / 60) * hourH;
@@ -154,10 +191,14 @@ function TimeBlock({
   return (
     <button
       type="button"
+      // 只有自己排的日程能拖；课程块（ev == null）拖了也没有可复制的记录
+      onPointerDown={ev ? onDown : undefined}
       onClick={ev ? () => onEdit(ev) : undefined}
-      className={`absolute z-10 overflow-hidden rounded-[6px] border pl-[10px] pr-2 py-[3px] text-left ${meta.bg} ${
+      className={`absolute z-10 overflow-hidden rounded-[6px] border pl-[10px] pr-2 py-[3px] text-left transition-opacity ${meta.bg} ${
         meta.edge
-      } ${ev ? "cursor-pointer" : "cursor-default"}`}
+      } ${ev ? "cursor-grab active:cursor-grabbing" : "cursor-default"} ${
+        dimmed ? "opacity-30" : ""
+      }`}
       style={{
         top: `${b.top}%`,
         height: `calc(${b.height}% - 3px)`,

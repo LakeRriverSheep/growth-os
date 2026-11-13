@@ -19,6 +19,8 @@ import {
   pctHeight,
   pctTop,
   eventsForDate,
+  snapDropStart,
+  FULL_RANGE,
   type PlanEvent,
 } from "../src/lib/planner.ts";
 
@@ -344,4 +346,29 @@ test("课程块第三行带节次与地点，单双周单独做角标", () => {
   assert.ok(single);
   assert.equal(single.title, "软件体系结构");
   assert.equal(single.sub, "第9-10节 · 图书馆6楼9机房");
+});
+
+// ── 拖拽落点 ────────────────────────────────────────────────
+test("拖拽落点：对齐 5 分钟，横向平拖回原时间", () => {
+  // 06:00–06:30 抓起，指针落在 06:02 → 差 2 分钟，吸附回 06:00
+  assert.equal(snapDropStart(6 * 60 + 2, 0, 30, 6 * 60), 6 * 60);
+  // 落点 09:03 → 对齐到 09:05
+  assert.equal(snapDropStart(9 * 60 + 3, 0, 30, 6 * 60), 9 * 60 + 5);
+  // 落点 09:02 → 对齐到 09:00
+  assert.equal(snapDropStart(9 * 60 + 2, 0, 30, 6 * 60), 9 * 60);
+  // 在块中间抓起（抓取偏移 15 分钟）：落下时块顶回到 09:00
+  assert.equal(snapDropStart(9 * 60 + 15, 15, 30, 6 * 60), 9 * 60);
+});
+
+test("拖拽落点：整块不出界，轴尾按 24 分钟压回来", () => {
+  // 30 分钟的块拖到最底：起点最多 23:30，不能算出 23:45 这种尾巴越界的值
+  assert.equal(snapDropStart(24 * 60, 0, 30, 6 * 60), 24 * 60 - 30);
+  // 拖到最顶：不早于 06:00
+  assert.equal(snapDropStart(1 * 60, 0, 30, 6 * 60), 6 * 60);
+  // 已经贴着底的长块（2 小时）→ 起点 22:00
+  assert.equal(snapDropStart(24 * 60, 0, 120, 6 * 60), 22 * 60);
+  // 起点 08:00 没越界就照落点走；贴着范围尾部（11:00 结束）才往回压
+  assert.equal(snapDropStart(8 * 60, 0, 60, 7 * 60, { startMin: 7 * 60, endMin: 11 * 60 }), 8 * 60);
+  assert.equal(snapDropStart(10 * 60 + 50, 0, 60, 7 * 60, { startMin: 7 * 60, endMin: 11 * 60 }), 10 * 60);
+  void FULL_RANGE;
 });
