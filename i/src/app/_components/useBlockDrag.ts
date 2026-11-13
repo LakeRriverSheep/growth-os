@@ -211,6 +211,8 @@ export function useBlockDrag({ range, scroller, onDrop }: Opts) {
       if (!ev || e.button !== 0 || e.pointerType === "touch") return;
       e.preventDefault();
       e.stopPropagation();
+      // 上一次没收拾干净就再拖：先解绑，避免监听器重复叠加
+      if (live.current) detach();
 
       const rect = e.currentTarget.getBoundingClientRect();
       const s = toMin(b.start);
@@ -284,18 +286,17 @@ export function useBlockDrag({ range, scroller, onDrop }: Opts) {
         scrollFrame.current = requestAnimationFrame(loop);
       }
     },
-    [finish, schedule, step],
+    [detach, finish, schedule, step],
   );
 
   // 卸载兜底
-  useEffect(() => {
-    const h = handlers.current;
-    return () => {
+  useEffect(
+    () => () => {
       live.current = false;
       detach();
-      void h;
-    };
-  }, [detach]);
+    },
+    [detach],
+  );
 
   /** 紧随拖动的那次 click 要忽略（别顺手弹出编辑面板） */
   const consumeClick = useCallback(() => {
