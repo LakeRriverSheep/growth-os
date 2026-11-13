@@ -74,10 +74,10 @@ export type PlanEvent = {
 };
 
 // ── 时间轴 ──────────────────────────────────────────────────
-export const DAY_START_MIN = 5 * 60;
-export const DAY_END_MIN = 23 * 60;
+export const DAY_START_MIN = 6 * 60; // 06:00
+export const DAY_END_MIN = 24 * 60; // 24:00（午夜）
 export const DAY_SPAN_MIN = DAY_END_MIN - DAY_START_MIN; // 1080
-export const HOURS = Array.from({ length: 18 }, (_, i) => 5 + i); // 5..22（共 18 格）
+export const HOURS = Array.from({ length: 18 }, (_, i) => 6 + i); // 6..23（共 18 格）
 
 /** 可视时间范围。默认全天 05:00–23:00；实际渲染时按当周事件裁剪，让格子跟着事件自适应伸缩。 */
 export type ViewRange = { startMin: number; endMin: number };

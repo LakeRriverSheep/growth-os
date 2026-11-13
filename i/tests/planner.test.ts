@@ -88,19 +88,19 @@ test("按日期取课：第 3 周周一是 3 门、周四是 1 门（单双周�
   assert.deepEqual(coursesOnDate("2026-09-18"), []);
 });
 
-test("时间轴换算：05:00–23:00 映射成 0–100%", () => {
-  assert.equal(pctTop(5 * 60), 0);
-  assert.equal(pctTop(14 * 60), 50); // 14:00 正好在正中间
-  assert.equal(pctTop(23 * 60), 100);
-  assert.equal(pctHeight(14 * 60, 15 * 60), 100 / 18);
+test("时间轴换算：06:00–24:00 映射成 0–100%", () => {
+  assert.equal(pctTop(6 * 60), 0);
+  assert.equal(pctTop(15 * 60), 50); // 15:00 正好在正中间
+  assert.equal(pctTop(24 * 60), 100);
+  assert.equal(pctHeight(15 * 60, 16 * 60), 100 / 18);
 });
 
-test("时间轴钳制：超出 05:00–23:00 的部分被裁掉，完全在外则不渲染", () => {
+test("时间轴钳制：超出 06:00–24:00 的部分被裁掉，完全在外则不渲染", () => {
   assert.deepEqual(axisRange("08:20", "10:00"), { s: 500, e: 600 });
-  assert.deepEqual(axisRange("04:30", "06:00"), { s: 300, e: 360 }); // 起点钳到 5:00
-  assert.deepEqual(axisRange("22:00", "23:30"), { s: 1320, e: 1380 }); // 终点钳到 23:00
+  assert.equal(axisRange("04:30", "06:00"), null); // 完全在 06:00 之前
+  assert.deepEqual(axisRange("22:00", "23:30"), { s: 1320, e: 1410 }); // 终点不再被 23:00 截断
   assert.equal(axisRange("00:00", "04:00"), null);
-  assert.equal(axisRange("23:30", "23:50"), null);
+  assert.deepEqual(axisRange("23:30", "23:50"), { s: 1410, e: 1430 }); // 深夜时段可正常显示
   assert.deepEqual(axisRange("09:00", "09:00"), { s: 540, e: 570 }); // 异常时长兜底 30 分钟
 });
 
@@ -196,9 +196,9 @@ test("短事件后跟着正常事件：不挤成窄列，各自占整列宽", ()
   );
 });
 
-test("贴近 23:00 的短任务：整体上移补足最小高度，不溢出时间轴", () => {
+test("贴近时间轴底部的短任务：整体上移补足最小高度，不溢出时间轴", () => {
   const events: PlanEvent[] = [
-    { id: 3, date: "2026-09-16", start: "22:55", end: "23:00", title: "收尾", kind: "life", note: "", weekly: false },
+    { id: 3, date: "2026-09-16", start: "23:55", end: "24:00", title: "收尾", kind: "life", note: "", weekly: false },
   ];
   const hourH = 56;
   const [b] = buildDay("2026-09-16", [], events, hourH);

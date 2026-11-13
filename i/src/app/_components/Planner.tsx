@@ -13,12 +13,10 @@ import {
 import { coursesOnDate } from "@/lib/schedule";
 import {
   DAY_END_MIN,
-  DAY_START_MIN,
+  FULL_RANGE,
   buildDay,
-  eventsForDate,
   hoursInRange,
   type PlanEvent,
-  type ViewRange,
 } from "@/lib/planner";
 import EventSheet, { type SheetPayload, type SheetState } from "./EventSheet";
 import { DayColumn, DayHead } from "./DayColumn";
@@ -42,43 +40,6 @@ function hourLabel(h: number): string {
 
 function hourMinLabel(min: number): string {
   return `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
-}
-
-/**
- * 根据当前可见天数里的「课程 + 自定义日程」算出要显示的时间段：
- * 最早事件前留 1 小时、最晚事件后留 1 小时，前后对齐到整点，再钳到 05:00–23:00。
- * 没有事件时给一段合理的默认窗口。这样格子大小完全跟着事件走，不浪费空白。
- */
-function computeViewRange(dates: string[], events: PlanEvent[]): ViewRange {
-  let minStart = Infinity;
-  let maxEnd = -Infinity;
-  for (const d of dates) {
-    for (const c of coursesOnDate(d)) {
-      const s = toMin(c.start);
-      const e = toMin(c.end);
-      if (!Number.isNaN(s)) minStart = Math.min(minStart, s);
-      if (!Number.isNaN(e)) maxEnd = Math.max(maxEnd, e);
-    }
-    for (const ev of eventsForDate(d, events)) {
-      const s = toMin(ev.start);
-      const e = toMin(ev.end);
-      if (!Number.isNaN(s)) minStart = Math.min(minStart, s);
-      if (!Number.isNaN(e)) maxEnd = Math.max(maxEnd, e);
-    }
-  }
-  if (minStart === Infinity) return { startMin: 7 * 60, endMin: 22 * 60 };
-
-  let startMin = Math.max(DAY_START_MIN, Math.floor(minStart / 60) * 60 - 60);
-  let endMin = Math.min(DAY_END_MIN, Math.ceil(maxEnd / 60) * 60 + 60);
-
-  // 最小跨度 8 小时：事件太少时别把单格放大到离谱
-  const MIN_SPAN = 8 * 60;
-  if (endMin - startMin < MIN_SPAN) {
-    const mid = (startMin + endMin) / 2;
-    startMin = Math.max(DAY_START_MIN, Math.round((mid - MIN_SPAN / 2) / 60) * 60);
-    endMin = Math.min(DAY_END_MIN, startMin + MIN_SPAN);
-  }
-  return { startMin, endMin };
 }
 
 export default function Planner() {
@@ -184,8 +145,8 @@ export default function Planner() {
     [days, layout.narrow],
   );
 
-  /** 可视时间段跟着当周事件走：事件少时范围收窄、格子放大填满屏幕；事件多时范围拉长 */
-  const viewRange = useMemo(() => computeViewRange(cols, events), [cols, events]);
+  /** 时间轴固定为整天 06:00–24:00，格子高度随屏幕填满 */
+  const viewRange = FULL_RANGE;
   const rangeHours = (viewRange.endMin - viewRange.startMin) / 60;
 
   /** 每小时格子高度：以填满屏幕为基准，但夹在 [MIN_FLEX_HOUR, MAX_HOUR] 之间 */
@@ -324,7 +285,8 @@ export default function Planner() {
       mode: "new",
       date,
       start: hourLabel(hour),
-      end: hourLabel(Math.min(23, hour + 1)),
+      // 23 点这一格的结尾用 23:59：<input type="time"> 不接受 "24:00"
+      end: hour >= 23 ? "23:59" : hourLabel(hour + 1),
     });
   }, []);
 
