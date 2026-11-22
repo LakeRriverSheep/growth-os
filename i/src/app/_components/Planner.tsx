@@ -26,6 +26,7 @@ import {
 import EventSheet, { type SheetPayload, type SheetState } from "./EventSheet";
 import { DayColumn, DayHead } from "./DayColumn";
 import { useBlockDrag, type DropResult } from "./useBlockDrag";
+import InboxBar from "./InboxBar";
 
 /** 前后各缓冲一周：手机上左右滑动时不至于一滑就出头 */
 const PAD = 7;
@@ -286,15 +287,24 @@ export default function Planner() {
   const nowVisible =
     !!today && cols.includes(today) && nowMin >= viewRange.startMin && nowMin < viewRange.endMin;
 
-  const openNew = useCallback((date: string, hour: number) => {
+  const openNew = useCallback((date: string, hour: number, title?: string) => {
     setSheet({
       mode: "new",
       date,
       start: hourLabel(hour),
       // 23 点这一格的结尾用 23:59：<input type="time"> 不接受 "24:00"
       end: hour >= 23 ? "23:59" : hourLabel(hour + 1),
+      title,
     });
   }, []);
+
+  /** 拖待办落到某天某小时：打开新建弹窗，标题预填待办文字 */
+  const handleDrop = useCallback(
+    (date: string, hour: number, text: string) => {
+      openNew(date, hour, text);
+    },
+    [openNew],
+  );
 
   async function handleSave(p: SheetPayload) {
     const id = sheet?.mode === "edit" ? sheet.event.id : 0;
@@ -378,75 +388,76 @@ export default function Planner() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  /** 窄屏：按天翻（滑得动就直接滑） */
-  function goDay(n: number) {
-    if (!layout.narrow) {
-      setAnchor(addDays(monday, 7 * n));
-      return;
-    }
-    const target = addDays(focusDate, n);
-    const el = scrollRef.current;
-    const idx = days.indexOf(target);
-    if (el && idx >= 0 && colW > 0) {
-      el.scrollTo({ left: idx * colW, behavior: "smooth" });
-      return;
-    }
-    setAnchor(target);
-  }
+  /** 整周切换（触摸板双指左右滑 / 键盘左右键）：直接挪锚点到上/下一周 */
+  const shiftWeek = useCallback(
+    (n: number) => {
+      setAnchor((prev) => addDays(mondayOf(prev || today), 7 * n));
+      didPinScroll.current = false; // 新一周重新做首屏定位
+    },
+    [today],
+  );
 
-  /** 今天：回到本周、切到今天的列、滚到当前时间 */
-  function goToday() {
-    wantDateRef.current = today;
-    pinnedDate.current = today; // 纵向由下面这行直接定位到此刻，别再让「按天定位」盖掉
-    setAnchor(today);
-    jumpTo(nowMin >= 0 ? nowMin - 90 : 7 * 60, true);
+  // 触摸板双指左右滑：横向滚动量累计超过阈值就切周（宽屏无横向滚动，双指横滑=切周）
+  useEffect(() => {
     const el = scrollRef.current;
-    const idx = days.indexOf(today);
-    if (el && layout.narrow && idx >= 0 && colW > 0) {
-      el.scrollTo({ left: idx * colW, behavior: "smooth" });
-    }
-  }
+    if (!el) return;
+    let acc = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const onWheel = (e: WheelEvent) => {
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return; // 只认横向
+      acc += e.deltaX;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (Math.abs(acc) > 80) shiftWeek(acc > 0 ? 1 : -1);
+        acc = 0;
+      }, 120);
+    };
+    el.addEventListener("wheel", onWheel, { passive: true });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      if (timer) clearTimeout(timer);
+    };
+  }, [shiftWeek]);
+
+  // 键盘左右键切周（输入框聚焦时不抢）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        shiftWeek(-1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        shiftWeek(1);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [shiftWeek]);
 
   if (!monday) return <div className="h-[100dvh] bg-zinc-950" />;
 
   const md = parseYmd(monday);
   const weekNo = termWeek(monday);
-  const btn =
-    "rounded-lg border border-zinc-800 px-2.5 py-1.5 text-xs text-zinc-400 transition-colors hover:border-zinc-600 hover:text-zinc-100";
 
   return (
     <div className="flex h-[100dvh] flex-col bg-zinc-950 text-zinc-100">
-      {/* 顶栏 */}
+      {/* 顶栏：简洁返回图标 + 标题 + 日期 */}
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-zinc-800 px-3 md:px-4">
         <Link
           href="/"
-          className="shrink-0 text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+          aria-label="返回"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
         >
-          ← 返回
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 12H5" />
+            <path d="M12 19l-7-7 7-7" />
+          </svg>
         </Link>
         <div className="flex items-baseline gap-2">
           <span className="text-xl font-bold tracking-tight">I</span>
           <span className="hidden text-[11px] text-zinc-600 sm:inline">周计划</span>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          <button
-            className={btn}
-            onClick={() => goDay(-1)}
-            aria-label={layout.narrow ? "上一天" : "上一周"}
-          >
-            ‹
-          </button>
-          <button className={btn} onClick={goToday}>
-            今天
-          </button>
-          <button
-            className={btn}
-            onClick={() => goDay(1)}
-            aria-label={layout.narrow ? "下一天" : "下一周"}
-          >
-            ›
-          </button>
         </div>
 
         <div className="min-w-0 truncate text-sm text-zinc-300">
@@ -462,13 +473,18 @@ export default function Planner() {
           </span>
         </div>
 
-        {/* 拖拽的用法提示：只在宽屏露出来，窄屏挤不下 */}
+        {/* 交互提示：只在宽屏露出来，窄屏挤不下 */}
         <span className="ml-auto hidden shrink-0 text-[11px] text-zinc-600 lg:inline">
+          双指左右滑 / 键盘 ←→ 切周
+          <span className="mx-1 text-zinc-700">·</span>
           拖动日程块 = 复制到那天
           <span className="mx-1 text-zinc-700">·</span>
-          按住 Shift 拖动 = 移动
+          Shift 拖动 = 移动
         </span>
       </header>
+
+      {/* 待办收集区：随手记，拖进下面日程 */}
+      <InboxBar />
 
       {/* 表头：在滚动容器之外，所以纵向永远贴顶；横向靠 translateX 跟着走 */}
       <div
@@ -564,6 +580,7 @@ export default function Planner() {
                   : null
               }
               onBlank={openNew}
+              onDrop={handleDrop}
               onEdit={(ev) => {
                 if (consumeClick()) return;
                 setSheet({ mode: "edit", event: ev });

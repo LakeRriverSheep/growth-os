@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { monthDayCn, toMin, weekdayCn } from "@/lib/date";
 import {
   KIND_META,
@@ -79,6 +80,7 @@ export function DayColumn({
   onBlank,
   onEdit,
   onBlockDown,
+  onDrop,
 }: {
   date: string;
   blocks: DayBlock[];
@@ -96,9 +98,10 @@ export function DayColumn({
   hint?: DropHint | null;
   /** 正在被拖走的块 key（半透明，提示「它是源」） */
   draggingKey?: string | null;
-  onBlank: (date: string, hour: number) => void;
+  onBlank: (date: string, hour: number, title?: string) => void;
   onEdit: (ev: PlanEvent) => void;
   onBlockDown?: (e: React.PointerEvent<HTMLElement>, b: DayBlock, date: string) => void;
+  onDrop?: (date: string, hour: number, text: string) => void;
 }) {
   const spanMin = Math.max(1, range.endMin - range.startMin);
 
@@ -113,15 +116,16 @@ export function DayColumn({
     >
       {isToday && <div className="pointer-events-none absolute inset-0 bg-emerald-500/[0.045]" />}
 
-      {/* 空白格：点一下就在这个整点新建 */}
+      {/* 空白格：点一下就在这个整点新建；拖待办过来落到这里 */}
       {hours.map((h) => (
-        <button
+        <DropCell
           key={h}
-          type="button"
-          aria-label={`${date} ${h} 点 新建日程`}
-          className="absolute inset-x-0 z-0 transition-colors hover:bg-zinc-600/20"
-          style={{ top: `${pctTop(h * 60, range)}%`, height: `${(60 / spanMin) * 100}%` }}
-          onClick={() => onBlank(date, h)}
+          date={date}
+          hour={h}
+          range={range}
+          spanMin={spanMin}
+          onBlank={onBlank}
+          onDrop={onDrop}
         />
       ))}
 
@@ -159,6 +163,50 @@ export function DayColumn({
         </div>
       )}
     </div>
+  );
+}
+
+/** 一个整点的空白格：点击新建；拖拽待办落下时高亮并生成带标题的日程 */
+function DropCell({
+  date,
+  hour,
+  range,
+  spanMin,
+  onBlank,
+  onDrop,
+}: {
+  date: string;
+  hour: number;
+  range: ViewRange;
+  spanMin: number;
+  onBlank: (date: string, hour: number, title?: string) => void;
+  onDrop?: (date: string, hour: number, text: string) => void;
+}) {
+  const [dragOver, setDragOver] = useState(false);
+  return (
+    <button
+      type="button"
+      aria-label={`${date} ${hour} 点 新建日程`}
+      className={`absolute inset-x-0 z-0 transition-colors ${
+        dragOver ? "bg-emerald-500/25 ring-1 ring-inset ring-emerald-400/60" : "hover:bg-zinc-600/20"
+      }`}
+      style={{ top: `${pctTop(hour * 60, range)}%`, height: `${(60 / spanMin) * 100}%` }}
+      onClick={() => onBlank(date, hour)}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("text/plain")) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+          setDragOver(true);
+        }
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const text = e.dataTransfer.getData("text/plain");
+        if (text && onDrop) onDrop(date, hour, text);
+      }}
+    />
   );
 }
 

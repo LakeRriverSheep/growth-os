@@ -4,7 +4,7 @@ import { fromMin, toMin } from "@/lib/date";
 import { KIND_LIST, KIND_META, type EventKind, type PlanEvent } from "@/lib/planner";
 
 export type SheetState =
-  | { mode: "new"; date: string; start: string; end: string }
+  | { mode: "new"; date: string; start: string; end: string; title?: string }
   | { mode: "edit"; event: PlanEvent };
 
 export type SheetPayload = {
@@ -38,7 +38,7 @@ export default function EventSheet({
           date: state.date,
           start: state.start,
           end: state.end,
-          title: "",
+          title: state.title ?? "",
           kind: "life",
           note: "",
           weekly: false,

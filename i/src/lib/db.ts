@@ -176,6 +176,18 @@ const SCHEMA = `
     source TEXT DEFAULT 'template',
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
   );
+
+  -- 周记录：某一天的图文记录（吃饭/健身/钢琴/去了哪…），可多张图片
+  CREATE TABLE IF NOT EXISTS journal_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL DEFAULT 'life',  -- meal | train | study | music | life
+    title TEXT NOT NULL DEFAULT '',
+    body TEXT DEFAULT '',
+    images TEXT DEFAULT '[]',           -- JSON 数组：图片 URL 列表
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_journal_date ON journal_entries(date);
 `;
 
 type SqlValue = string | number | null;
