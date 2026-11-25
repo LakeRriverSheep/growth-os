@@ -63,6 +63,8 @@ export default function Planner() {
     sbw: 0,
   });
   const [focusIdx, setFocusIdx] = useState(PAD);
+  // overview=true：手机窄屏也缩成整周 7 列概览（双指捏合切换）；false 回到一屏一天
+  const [overview, setOverview] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const resizeObs = useRef<ResizeObserver | null>(null);
@@ -141,16 +143,19 @@ export default function Planner() {
     };
   }, [monday, version]);
 
+  /** 有效窄屏：手机且不在整周概览模式时，才一屏一天横滑切天 */
+  const narrow = layout.narrow && !overview;
+
   const colW = useMemo(() => {
     if (!layout.w) return 0;
     const inner = Math.max(0, layout.w - AXIS_W);
-    return layout.narrow ? Math.max(200, inner) : 0;
-  }, [layout.w, layout.narrow]);
+    return narrow ? Math.max(200, inner) : 0;
+  }, [layout.w, narrow]);
 
-  /** 桌面上只渲染本周 7 列（横滑交给手机） */
+  /** 桌面上只渲染本周 7 列（横滑交给手机）；手机 overview 模式下也缩成 7 列整周概览 */
   const cols = useMemo(
-    () => (layout.narrow ? days : days.slice(PAD, PAD + 7)),
-    [days, layout.narrow],
+    () => (narrow ? days : days.slice(PAD, PAD + 7)),
+    [days, narrow],
   );
 
   /** 时间轴固定为整天 06:00–24:00，格子高度随屏幕填满 */
@@ -221,7 +226,7 @@ export default function Planner() {
   // 滑动中突然跳回周一，看起来就是整页被刷新了。现在一律保持当前正在看的那一天。
   useEffect(() => {
     const el = scrollRef.current;
-    if (!el || !layout.narrow || !colW) return;
+    if (!el || !narrow || !colW) return;
     const raf = requestAnimationFrame(() => {
       const wanted = wantDateRef.current;
       // 水合后的第一帧 today 还是空串，先别定位，等下一轮拿到真实日期再落到「今天」
@@ -240,12 +245,12 @@ export default function Planner() {
       syncHead(el.scrollLeft);
     });
     return () => cancelAnimationFrame(raf);
-  }, [monday, layout.narrow, colW, days, syncHead, today]);
+  }, [monday, narrow, colW, days, syncHead, today]);
 
   // 宽屏：没有横向滚动，表头别留位移
   useEffect(() => {
-    if (!layout.narrow) syncHead(0);
-  }, [layout.narrow, syncHead]);
+    if (!narrow) syncHead(0);
+  }, [narrow, syncHead]);
 
   // 横向滚动：表头跟手平移；只在跨过一整天时才更新状态（避免每帧重渲染）
   useEffect(() => {
@@ -256,7 +261,7 @@ export default function Planner() {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         syncHead(el.scrollLeft);
-        if (!layout.narrow || !colW) return;
+        if (!narrow || !colW) return;
         const i = Math.max(0, Math.min(TOTAL - 1, Math.round(el.scrollLeft / colW)));
         focusIdxRef.current = i;
         setFocusIdx((prev) => (prev === i ? prev : i));
@@ -267,7 +272,7 @@ export default function Planner() {
       el.removeEventListener("scroll", onScroll);
       cancelAnimationFrame(raf);
     };
-  }, [layout.narrow, colW, syncHead]);
+  }, [narrow, colW, syncHead]);
 
   const focusDate = days[focusIdx] ?? monday;
 
@@ -416,6 +421,79 @@ export default function Planner() {
     };
   }, [shiftWeek]);
 
+  // 触屏单指横向快滑：平板/桌面（整周视图，无横向滚动）→ 切周；手机窄屏（单日视图）交给 snap 切天，不抢
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let startX = 0;
+    let startY = 0;
+    let startT = 0;
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      startT = performance.now();
+    };
+    const onTouchEnd = (e: TouchEvent) => {
+      // 窄屏（手机单日视图）不处理：横向滑动留给切天
+      if (narrow) return;
+      const t = e.changedTouches[0];
+      if (!t) return;
+      const dx = t.clientX - startX;
+      const dy = t.clientY - startY;
+      const dt = performance.now() - startT;
+      // 明显的横向快滑（横向位移 > 纵向，且够快/够远）
+      if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.2 || dt > 400) return;
+      shiftWeek(dx < 0 ? 1 : -1);
+    };
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchend", onTouchEnd);
+    };
+  }, [shiftWeek, narrow]);
+
+  // 双指捏合缩放：手机上在「单日视图 ↔ 整周概览」之间切换
+  // 双指张开（距离变大）= 看整周概览；双指并拢（距离变小）= 回单日视图
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let initDist = 0;
+    let initOverview = false;
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        initDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY,
+        );
+        initOverview = overview;
+      }
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || initDist === 0) return;
+      const d = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY,
+      );
+      const ratio = d / initDist;
+      // 明显张开 → 概览；明显并拢 → 单日
+      if (ratio > 1.25 && !initOverview) {
+        initOverview = true;
+        setOverview(true);
+      } else if (ratio < 0.8 && initOverview) {
+        initOverview = false;
+        setOverview(false);
+      }
+    };
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+    };
+  }, [overview]);
+
   // 键盘左右键切周（输入框聚焦时不抢）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -472,11 +550,11 @@ export default function Planner() {
 
         {/* 交互提示：只在宽屏露出来，窄屏挤不下 */}
         <span className="ml-auto hidden shrink-0 text-[11px] text-zinc-600 lg:inline">
-          双指左右滑 / 键盘 ←→ 切周
-          <span className="mx-1 text-zinc-700">·</span>
-          拖动日程块 = 复制到那天
-          <span className="mx-1 text-zinc-700">·</span>
-          Shift 拖动 = 移动
+          {narrow ? (
+            <>双指捏合 = 缩放整周 · 长按日程 = 拖动复制 · 左右滑 = 切天</>
+          ) : (
+            <>双指左右滑 / 键盘 ←→ 切周 · 拖动日程块 = 复制 · Shift 拖动 = 移动</>
+          )}
         </span>
       </header>
 
@@ -502,7 +580,7 @@ export default function Planner() {
                 key={date}
                 date={date}
                 isToday={date === today}
-                width={layout.narrow ? colW : undefined}
+                width={narrow ? colW : undefined}
               />
             ))}
           </div>
@@ -513,14 +591,14 @@ export default function Planner() {
       <div
         ref={attachScroll}
         className={`planner-scroll min-h-0 flex-1 select-none ${
-          layout.narrow
+          narrow
             ? "snap-x snap-mandatory scroll-pl-14 overflow-auto"
             : "overflow-x-hidden overflow-y-auto"
         }`}
       >
         {/* 窄屏下这一行要 w-max：否则 sticky 的包含块只有一屏宽，左侧时间轴钉不住 */}
         <div
-          className={`flex items-start ${layout.narrow ? "w-max" : "w-full"}`}
+          className={`flex items-start ${narrow ? "w-max" : "w-full"}`}
           style={{ height: contentH }}
         >
           {/* 时间轴：纵向随内容、横向钉住 */}
@@ -555,7 +633,7 @@ export default function Planner() {
               blocks={blocks}
               isToday={date === today}
               nowMin={nowMin}
-              width={layout.narrow ? colW : undefined}
+              width={narrow ? colW : undefined}
               hourH={hourH}
               contentH={contentH}
               range={viewRange}

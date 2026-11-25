@@ -52,8 +52,10 @@ type Handlers = {
 /**
  * 日程块拖拽：把一个块拖到任意一天、任意时间。
  *
- * 用 Pointer Events（鼠标 + 触屏同一套 API），但**触屏不启用拖拽**——
- * 手机上左右滑是切天，块一旦吃掉手势就滑不动了，手机走「点开 → 改日期」更稳。
+ * 用 Pointer Events（鼠标 + 触屏同一套 API）。
+ * - 鼠标：按下即拖（默认复制，按住 Shift 是移动）。
+ * - 触屏：**长按**才启动拖拽（约 500ms 且几乎没位移），否则快速滑动留给「切天」手势，
+ *   避免拖拽吃掉横向滑动。长按后拖到屏幕边缘会横向/纵向自动滚动跟随。
  * 默认动作是「复制」（源块保持不变），按住 Shift 拖是「移动」。
  */
 export function useBlockDrag({ range, scroller, onDrop }: Opts) {
@@ -74,6 +76,10 @@ export function useBlockDrag({ range, scroller, onDrop }: Opts) {
   const handlers = useRef<Handlers>({});
   const rangeRef = useRef(range);
   const dropRef = useRef(onDrop);
+  /** 触屏长按定时器：到期且几乎没动 = 启动拖拽 */
+  const longPress = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isTouch = useRef(false);
+  const longPressed = useRef(false);
 
   useEffect(() => {
     rangeRef.current = range;
@@ -134,17 +140,22 @@ export function useBlockDrag({ range, scroller, onDrop }: Opts) {
     });
   }, [flush]);
 
-  /** 靠边自动滚动：不然「06:00 拖到 22:00」得先手动滚屏，根本拖不动 */
+  /** 靠边自动滚动：纵向（拖到 06:00↔22:00）+ 横向（窄屏拖到相邻天）都跟手 */
   const step = useCallback(() => {
     const el = scroller.current;
     if (!live.current || !el) return;
     const r = el.getBoundingClientRect();
+    const x = pointer.current.x;
     const y = pointer.current.y;
     let dy = 0;
+    let dx = 0;
     if (y < r.top + EDGE) dy = -Math.min(24, (r.top + EDGE - y) / 2);
     else if (y > r.bottom - EDGE) dy = Math.min(24, (y - (r.bottom - EDGE)) / 2);
-    if (!dy) return;
+    if (x < r.left + EDGE) dx = -Math.min(24, (r.left + EDGE - x) / 2);
+    else if (x > r.right - EDGE) dx = Math.min(24, (x - (r.right - EDGE)) / 2);
+    if (!dy && !dx) return;
     el.scrollTop += dy;
+    el.scrollLeft += dx;
     schedule();
   }, [scroller, schedule]);
 
@@ -157,6 +168,10 @@ export function useBlockDrag({ range, scroller, onDrop }: Opts) {
       window.removeEventListener("keydown", h.key);
       window.removeEventListener("keyup", h.key);
     }
+    if (longPress.current) {
+      clearTimeout(longPress.current);
+      longPress.current = null;
+    }
     handlers.current = {};
     if (frame.current) {
       cancelAnimationFrame(frame.current);
@@ -167,6 +182,7 @@ export function useBlockDrag({ range, scroller, onDrop }: Opts) {
       scrollFrame.current = 0;
     }
     document.body.style.cursor = "";
+    document.body.style.touchAction = "";
   }, []);
 
   /** 收尾：commit=true 才落地，false 只清理（Esc / 指针被系统抢走） */
@@ -204,11 +220,11 @@ export function useBlockDrag({ range, scroller, onDrop }: Opts) {
     [computeTarget, detach],
   );
 
-  const begin = useCallback(
+  /** 真正启动拖拽：鼠标按下即来，触屏长按后才来 */
+  const startDrag = useCallback(
     (e: React.PointerEvent<HTMLElement>, b: DayBlock, date: string) => {
-      // 课程块（课表生成的）不可拖：库里没有它，复制出来的会是一条无主日程
       const ev = b.event;
-      if (!ev || e.button !== 0 || e.pointerType === "touch") return;
+      if (!ev) return;
       e.preventDefault();
       e.stopPropagation();
       // 上一次没收拾干净就再拖：先解绑，避免监听器重复叠加
@@ -228,6 +244,7 @@ export function useBlockDrag({ range, scroller, onDrop }: Opts) {
       shift.current = e.shiftKey;
       moved.current = false;
       live.current = true;
+      if (isTouch.current) document.body.style.touchAction = "none";
 
       const first: DragTip = {
         ev,
@@ -287,6 +304,55 @@ export function useBlockDrag({ range, scroller, onDrop }: Opts) {
       }
     },
     [detach, finish, schedule, step],
+  );
+
+  const begin = useCallback(
+    (e: React.PointerEvent<HTMLElement>, b: DayBlock, date: string) => {
+      // 课程块（课表生成的）不可拖：库里没有它，复制出来的会是一条无主日程
+      const ev = b.event;
+      if (!ev || e.button !== 0) return;
+
+      const touch = e.pointerType === "touch";
+      isTouch.current = touch;
+      longPressed.current = false;
+
+      // 触屏：按下先不抢手势，等长按确认。快速滑动（切天）不触发拖拽。
+      if (touch) {
+        const startX = e.clientX;
+        const startY = e.clientY;
+        if (longPress.current) clearTimeout(longPress.current);
+        longPress.current = setTimeout(() => {
+          longPress.current = null;
+          longPressed.current = true;
+          startDrag(e, b, date);
+        }, 500);
+        // 长按等待期：一旦明显位移就取消（交给切天手势）
+        const cancelIfMoved = (evt: PointerEvent) => {
+          const d = Math.abs(evt.clientX - startX) + Math.abs(evt.clientY - startY);
+          if (d >= MOVE_THRESHOLD * 2 && !longPressed.current) {
+            if (longPress.current) {
+              clearTimeout(longPress.current);
+              longPress.current = null;
+            }
+            window.removeEventListener("pointermove", cancelIfMoved);
+            window.removeEventListener("pointerup", cancelIfMoved);
+            window.removeEventListener("pointercancel", cancelIfMoved);
+          }
+        };
+        window.addEventListener("pointermove", cancelIfMoved);
+        window.addEventListener("pointerup", cancelIfMoved);
+        window.addEventListener("pointercancel", cancelIfMoved);
+        // 存起来，startDrag 时一并清掉
+        handlers.current = { move: cancelIfMoved } as Handlers;
+        return;
+      }
+
+      // 鼠标：按下即拖
+      e.preventDefault();
+      e.stopPropagation();
+      startDrag(e, b, date);
+    },
+    [startDrag],
   );
 
   // 卸载兜底
