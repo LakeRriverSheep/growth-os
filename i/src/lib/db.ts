@@ -156,27 +156,6 @@ const SCHEMA = `
     created_at TEXT DEFAULT (datetime('now', 'localtime'))
   );
 
-  -- 周复盘：一条 = 一张图/一段文字/一个链接经 AI 抽取后的结果（不存原图）
-  CREATE TABLE IF NOT EXISTS week_items (
-    id TEXT PRIMARY KEY,
-    week_start TEXT NOT NULL,            -- 该周周一 YYYY-MM-DD
-    kind TEXT NOT NULL DEFAULT 'other',  -- training|diet|sleep|study|thought|other
-    label TEXT DEFAULT '',               -- 来源显示名
-    source TEXT DEFAULT '',              -- 链接或空
-    raw TEXT DEFAULT '',                 -- OCR/原文
-    data TEXT DEFAULT '{}',              -- 结构化 JSON
-    created_at TEXT DEFAULT (datetime('now', 'localtime'))
-  );
-  CREATE INDEX IF NOT EXISTS idx_week_items_week ON week_items(week_start);
-
-  -- 周复盘：每周一份总结文案（AI 生成或模板降级）
-  CREATE TABLE IF NOT EXISTS week_reports (
-    week_start TEXT PRIMARY KEY,
-    summary TEXT DEFAULT '{}',
-    source TEXT DEFAULT 'template',
-    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
-  );
-
   -- 周记录：某一天的图文记录（吃饭/健身/钢琴/去了哪…），可多张图片
   CREATE TABLE IF NOT EXISTS journal_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -188,6 +167,13 @@ const SCHEMA = `
     updated_at TEXT DEFAULT (datetime('now', 'localtime'))
   );
   CREATE INDEX IF NOT EXISTS idx_journal_date ON journal_entries(date);
+
+  -- 身份层：整份 JSON（profile/motives/actions/bans/dailyQuestions），前端 CRUD 后整体写回
+  CREATE TABLE IF NOT EXISTS identity (
+    key TEXT PRIMARY KEY,
+    data TEXT NOT NULL DEFAULT '{}',
+    updated_at TEXT DEFAULT (datetime('now', 'localtime'))
+  );
 `;
 
 type SqlValue = string | number | null;

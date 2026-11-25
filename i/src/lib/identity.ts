@@ -1,7 +1,19 @@
 // 身份层数据：我要成为什么样的人（月级更新，来源 2026-09-29 长文自述）
-// 改这里的人是月级的你，不是日级的情绪。
+// DEFAULT 是首次建库的种子；实际数据存 identity 表，前端增删改查后写回。
 
-export const identity = {
+export type ProfileGroup = { group: string; tags: string[] };
+export type Action = { goal: string; action: string };
+
+export type Identity = {
+  updatedAt: string;
+  profile: ProfileGroup[];
+  motives: string[];
+  actions: Action[];
+  bans: string[];
+  dailyQuestions: string[];
+};
+
+export const IDENTITY_DEFAULT: Identity = {
   updatedAt: "2026-09-29",
 
   // ① 我想成为什么样的人（身份画像）
@@ -88,3 +100,7 @@ export const identity = {
     "我不应该做什么？",
   ],
 };
+
+/** 兼容旧引用的默认值（供 SSR 兜底渲染用） */
+export const identity: Identity = IDENTITY_DEFAULT;
+
