@@ -69,7 +69,8 @@ export default function Planner() {
   const headRef = useRef<HTMLDivElement | null>(null);
   const didPinScroll = useRef(false);
   const didPinX = useRef(false);
-  const pinnedDate = useRef<string | null>(null);
+  /** 当前正在看的是第几列。用 ref 而不是 state 读，尺寸变化重排时才不会把视图弹回周一 */
+  const focusIdxRef = useRef(PAD);
   const wantDateRef = useRef<string | null>(null);
 
   // 量容器：宽度决定是否窄屏，高度决定每小时多高。
@@ -198,58 +199,44 @@ export default function Planner() {
     [hourH, viewRange.startMin],
   );
 
-  /** 某天最早的一个日程开始时间；没有日程就返回 NaN */
-  const earliestOn = useCallback(
-    (date: string) => {
-      const day = board.find((d) => d.date === date);
-      let m = NaN;
-      for (const b of day?.blocks ?? []) {
-        const v = toMin(b.start);
-        m = Number.isNaN(m) ? v : Math.min(m, v);
-      }
-      return m;
-    },
-    [board],
-  );
-
-  // 首屏定位：
-  // · 宽屏＝整周一屏并排 → 对准本周最早一节课前 30 分钟
-  // · 窄屏＝一屏一天 → 对准「当前看的那一天」最早一节课前 30 分钟；
-  //   左右滑到另一天时跟着重新定位（一天一屏，换天就等于换上下文）
+  // 首屏纵向定位：**只在进入页面时做一次**。
+  // 手机左右滑切天是纯横向平移，绝不能在换天时改 scrollTop：
+  // 这个容器是 snap-x snap-mandatory，一次纵向 scrollTo 会让浏览器重新吸附横向位置，
+  // 打断正在进行的惯性滑动，表现出来就是「整个画面突然闪一下」。
+  // 之后只有「今天」按钮会显式调用 jumpTo；切周走 anchor 变化，也不会在这里动滚动条。
   useEffect(() => {
-    if (!layout.h) return;
-    if (layout.narrow) {
-      const focused = days[focusIdx];
-      if (!focused || pinnedDate.current === focused) return;
-      pinnedDate.current = focused;
-      const first = earliestOn(focused);
-      jumpTo(Number.isNaN(first) ? 7 * 60 : first - 30, false);
-      return;
-    }
-    if (didPinScroll.current) return;
+    if (!layout.h || !anchor || didPinScroll.current) return;
     didPinScroll.current = true;
     const first = Number.isFinite(earliestMin) ? earliestMin : 7 * 60;
     jumpTo(Math.min(7 * 60, first - 30), false);
-  }, [layout.h, layout.narrow, days, focusIdx, earliestMin, earliestOn, jumpTo]);
+  }, [layout.h, anchor, earliestMin, jumpTo]);
 
   const syncHead = useCallback((sl: number) => {
     const h = headRef.current;
     if (h) h.style.transform = sl ? `translateX(${-sl}px)` : "";
   }, []);
 
-  // 窄屏：首屏落在「今天」（不在本周时退回周一），切周后回到新一周的周一；表头同步平移
+  // 窄屏横向定位：只在「首屏」和「明确指定目标（今天 / 切周）」时动 scrollLeft。
+  // 之前这里在任何 deps 变化（colW 变＝手机地址栏收起、旋转屏幕）时都无条件回到 PAD＝本周一，
+  // 滑动中突然跳回周一，看起来就是整页被刷新了。现在一律保持当前正在看的那一天。
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || !layout.narrow || !colW) return;
     const raf = requestAnimationFrame(() => {
-      const want = wantDateRef.current;
-      let i = want ? days.indexOf(want) : -1;
-      if (i < 0 && !didPinX.current && today) i = days.indexOf(today);
+      const wanted = wantDateRef.current;
+      // 水合后的第一帧 today 还是空串，先别定位，等下一轮拿到真实日期再落到「今天」
+      if (!wanted && !didPinX.current && !today) return;
+      // 首屏定位到今天；之后不管因为什么原因重跑，都保持 focusIdx 指向的那天
+      const target = wanted ?? (didPinX.current ? days[focusIdxRef.current] : today);
+      let i = target ? days.indexOf(target) : -1;
       if (i < 0) i = PAD;
       wantDateRef.current = null;
       didPinX.current = true;
-      el.scrollLeft = i * colW;
-      setFocusIdx(i);
+      focusIdxRef.current = i;
+      const left = i * colW;
+      // 已经在正确位置就别再写 scrollLeft：惯性滑动中写一次就会把它打断
+      if (Math.abs(el.scrollLeft - left) > 1) el.scrollLeft = left;
+      setFocusIdx((prev) => (prev === i ? prev : i));
       syncHead(el.scrollLeft);
     });
     return () => cancelAnimationFrame(raf);
@@ -271,6 +258,7 @@ export default function Planner() {
         syncHead(el.scrollLeft);
         if (!layout.narrow || !colW) return;
         const i = Math.max(0, Math.min(TOTAL - 1, Math.round(el.scrollLeft / colW)));
+        focusIdxRef.current = i;
         setFocusIdx((prev) => (prev === i ? prev : i));
       });
     };
@@ -374,6 +362,15 @@ export default function Planner() {
     scroller: scrollRef,
     onDrop: commitDrop,
   });
+
+  /** 稳定的回调：切天时 DayColumn 才能靠 memo 整个跳过重渲染 */
+  const openEdit = useCallback(
+    (ev: PlanEvent) => {
+      if (consumeClick()) return;
+      setSheet({ mode: "edit", event: ev });
+    },
+    [consumeClick],
+  );
 
   async function undoCopy(id: number) {
     setToast(null);
@@ -581,10 +578,7 @@ export default function Planner() {
               }
               onBlank={openNew}
               onDrop={handleDrop}
-              onEdit={(ev) => {
-                if (consumeClick()) return;
-                setSheet({ mode: "edit", event: ev });
-              }}
+              onEdit={openEdit}
               onBlockDown={beginDrag}
             />
           ))}

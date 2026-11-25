@@ -31,8 +31,9 @@ body {
    结构（参考 FullCalendar / Google Calendar）：
      · 表头行在滚动容器之外 —— 永远贴顶，靠 translateX 跟着横向滚动
      · 一个滚动容器同时管纵向与横向；左侧时间轴 sticky left 钉住
-     · 每小时高度由 JS 按容器高度算（最低 56px），不够就纵向滚动
-   横线画在列背景上：整点实线 + 半点虚线，随 --hour-h 自动缩放。 */
+     · 每小时高度由 JS 按容器高度算（最低 80px），不够就纵向滚动
+   横线画在列背景上：整点实线 + 半点虚线，随 --hour-h 自动缩放。
+   overscroll-behavior: contain：手机横向滑到边缘时被浏览器当成「前进/后退」导航，会整页重载。 */
 .planner-scroll {
   scrollbar-width: thin;
   scrollbar-color: rgb(63 63 70 / 0.9) transparent;

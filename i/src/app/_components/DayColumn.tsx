@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { memo, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { monthDayCn, toMin, weekdayCn } from "@/lib/date";
 import {
   KIND_META,
@@ -21,7 +21,7 @@ export function gridBackground(hourH: number) {
 }
 
 /** 表头单元格：周几 + 日期，今天用实心圆点出来 */
-export function DayHead({
+export const DayHead = memo(function DayHead({
   date,
   isToday,
   width,
@@ -59,13 +59,15 @@ export function DayHead({
       </span>
     </div>
   );
-}
+});
 
 /** 拖动落点提示：目标列上画一个虚线框，告诉你会落在几点 */
 export type DropHint = { top: number; height: number; text: string };
 
-/** 一天的列：网格线在下、日程块在上、当前时间线压在最上 */
-export function DayColumn({
+/** 一天的列：网格线在下、日程块在上、当前时间线压在最上。
+ *  memo 很关键：手机上左右滑一天只改顶栏文字，21 列不该跟着全部 reconcile，
+ *  否则滑动中会掉帧、看起来像「整页重刷」。 */
+export const DayColumn = memo(function DayColumn({
   date,
   blocks,
   isToday,
@@ -100,7 +102,7 @@ export function DayColumn({
   draggingKey?: string | null;
   onBlank: (date: string, hour: number, title?: string) => void;
   onEdit: (ev: PlanEvent) => void;
-  onBlockDown?: (e: React.PointerEvent<HTMLElement>, b: DayBlock, date: string) => void;
+  onBlockDown?: (e: ReactPointerEvent<HTMLElement>, b: DayBlock, date: string) => void;
   onDrop?: (date: string, hour: number, text: string) => void;
 }) {
   const spanMin = Math.max(1, range.endMin - range.startMin);
@@ -164,7 +166,7 @@ export function DayColumn({
       )}
     </div>
   );
-}
+});
 
 /** 一个整点的空白格：点击新建；拖拽待办落下时高亮并生成带标题的日程 */
 function DropCell({
@@ -225,7 +227,7 @@ function TimeBlock({
   /** 正在被拖走：压暗，让「源」和「落点」一眼分开 */
   dimmed?: boolean;
   onEdit: (ev: PlanEvent) => void;
-  onDown?: (e: React.PointerEvent<HTMLElement>) => void;
+  onDown?: (e: ReactPointerEvent<HTMLElement>) => void;
 }) {
   const meta = KIND_META[b.kind];
   const px = ((toMin(b.end) - toMin(b.start)) / 60) * hourH;
